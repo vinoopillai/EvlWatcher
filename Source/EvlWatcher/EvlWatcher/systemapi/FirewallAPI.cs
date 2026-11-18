@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using NetFwTypeLib;
 using System.Net;
 using EvlWatcher.Comparer;
@@ -15,10 +16,10 @@ namespace EvlWatcher.SystemAPI
         #region private members
         private const string CLSID_FWPOLICY2 = "{E2B3C97F-6AE1-41AC-817A-F6F92166D7DD}";
         private const string CLSID_FWRULE = "{2C5BC43E-3369-4C33-AB0C-BE9469677AF4}";
+        private const string RULE_NAME = "EvlWatcher";
         private bool _disposed;
 
         private INetFwPolicy2 _fwPolicy2 = null;
-        private INetFwRule _fwRule = null;
 
         #endregion
 
@@ -33,45 +34,53 @@ namespace EvlWatcher.SystemAPI
 
         #region private operations
 
-        private INetFwRule GetOrCreateEvlWatcherRule()
+        private static void ReleaseComObject(object comObject)
         {
-            return GetOrCreateIPv4Rule(true);
+            if (comObject != null && Marshal.IsComObject(comObject))
+                Marshal.ReleaseComObject(comObject);
         }
 
-        private INetFwRule GetOrCreateIPv4Rule(bool create)
+        /// <summary>
+        /// Returns the EvlWatcher rule, creating it when <paramref name="create"/> is set.
+        /// The caller owns the returned COM object and must release it with <see cref="ReleaseComObject"/>.
+        /// </summary>
+        private INetFwRule GetEvlWatcherRule(bool create)
         {
-            INetFwPolicy2 policies = GetPolicy2();
-            INetFwRule rule = null;
-
-            bool found = false;
-            foreach (INetFwRule r in policies.Rules)
+            INetFwRules rules = GetPolicy2().Rules;
+            try
             {
-                if (r.Name == "EvlWatcher")
+                try
                 {
-                    found = true;
-                    rule = r;
-                    break;
+                    // Item() looks the rule up by name, so we don't have to marshal (and leak) every rule on the system
+                    return rules.Item(RULE_NAME);
                 }
-            }
+                catch (FileNotFoundException)
+                {
+                    // rule does not exist (HRESULT 0x80070002)
+                }
 
-            if (!found && create)
-            {
-                rule = GetFwRule();
+                if (!create)
+                    return null;
+
+                INetFwRule rule = CreateFwRule();
                 rule.Enabled = false;
                 rule.Action = NET_FW_ACTION_.NET_FW_ACTION_BLOCK;
                 rule.Description = "This is the rule EvlWatcher uses for temporarily banning IPs. It will enable/disable automatically when IPs need to be banned. You don't have to manually enable it.";
                 rule.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_IN;
                 rule.EdgeTraversal = false;
                 rule.LocalAddresses = "*";
-                rule.Name = "EvlWatcher";
+                rule.Name = RULE_NAME;
                 rule.Profiles = int.MaxValue;// = means all Profiles
                 rule.Protocol = 256;
-                policies.Rules.Add(rule);
+                rules.Add(rule);
+
+                return rule;
             }
-
-            return rule;
+            finally
+            {
+                ReleaseComObject(rules);
+            }
         }
-
 
         private INetFwPolicy2 GetPolicy2()
         {
@@ -86,16 +95,10 @@ namespace EvlWatcher.SystemAPI
             return _fwPolicy2;
         }
 
-        private INetFwRule GetFwRule()
+        private static INetFwRule CreateFwRule()
         {
-            if (_fwRule == null)
-            {
-                Type objectType = Type.GetTypeFromCLSID(new Guid(CLSID_FWRULE));
-                _fwRule = Activator.CreateInstance(objectType)
-                      as INetFwRule;
-            }
-
-            return _fwRule;
+            Type objectType = Type.GetTypeFromCLSID(new Guid(CLSID_FWRULE));
+            return Activator.CreateInstance(objectType) as INetFwRule;
         }
 
         #endregion
@@ -111,76 +114,99 @@ namespace EvlWatcher.SystemAPI
 
         public void ClearIPBanList()
         {
-            INetFwRule rule = GetOrCreateIPv4Rule(false);
-            if (rule != null)
-                GetPolicy2().Rules.Remove(rule.Name);
+            INetFwRule rule = GetEvlWatcherRule(false);
+            if (rule == null)
+                return;
+
+            ReleaseComObject(rule);
+
+            INetFwRules rules = GetPolicy2().Rules;
+            try
+            {
+                rules.Remove(RULE_NAME);
+            }
+            finally
+            {
+                ReleaseComObject(rules);
+            }
         }
 
         public bool AdjustIPBanList(List<IPAddress> ips)
         {
             ips.Sort(new IPAddressComparer());
 
-            INetFwRule rule = GetOrCreateEvlWatcherRule();
-
-            bool changed = false;
-
-            if (ips.Count == 0)
+            INetFwRule rule = GetEvlWatcherRule(true);
+            try
             {
-                if (rule.Enabled)
+                bool changed = false;
+
+                if (ips.Count == 0)
                 {
-                    rule.RemoteAddresses = "";
-                    rule.Enabled = false;
-                    changed = true;
+                    if (rule.Enabled)
+                    {
+                        rule.RemoteAddresses = "";
+                        rule.Enabled = false;
+                        changed = true;
+                    }
                 }
+                else
+                {
+                    string remoteAdresses = "";
+                    bool first = true;
+                    foreach (IPAddress s in ips)
+                    {
+                        if (!first)
+                            remoteAdresses += ",";
+                        else
+                            first = false;
+
+                        if (s.ToString().Contains("."))
+                            remoteAdresses += s + "/255.255.255.255";
+                        else
+                            remoteAdresses += s; //no netmask for ipv6?
+                    }
+
+                    if (rule.RemoteAddresses != remoteAdresses)
+                    {
+                        rule.RemoteAddresses = remoteAdresses;
+                        changed = true;
+                    }
+
+                    if (!rule.Enabled)
+                    {
+                        rule.Enabled = true;
+                        changed = true;
+                    }
+                }
+
+                return changed;
             }
-            else
+            finally
             {
-                string remoteAdresses = "";
-                bool first = true;
-                foreach (IPAddress s in ips)
-                {
-                    if (!first)
-                        remoteAdresses += ",";
-                    else
-                        first = false;
-
-                    if (s.ToString().Contains("."))
-                        remoteAdresses += s + "/255.255.255.255";
-                    else
-                        remoteAdresses += s; //no netmask for ipv6?
-                }
-
-                if (rule.RemoteAddresses != remoteAdresses)
-                {
-                    rule.RemoteAddresses = remoteAdresses;
-                    changed = true;
-                }
-
-                if (!rule.Enabled)
-                {
-                    rule.Enabled = true;
-                    changed = true;
-                }
+                ReleaseComObject(rule);
             }
-
-            return changed;
-
         }
 
         public List<string> GetBannedIPs()
         {
             List<string> currentlyBannedIPs = new List<string>();
 
-            INetFwRule fwRule = GetOrCreateEvlWatcherRule();
-
-            if (fwRule.Enabled)
+            INetFwRule fwRule = GetEvlWatcherRule(true);
+            try
             {
-                string remoteAddresses = fwRule.RemoteAddresses;
-                if (remoteAddresses != null)
+                if (fwRule.Enabled)
                 {
-                    foreach (string s in remoteAddresses.Split(','))
-                        currentlyBannedIPs.Add(s.Contains("-") ? s.Split('-')[0] : s);
+                    string remoteAddresses = fwRule.RemoteAddresses;
+                    if (remoteAddresses != null)
+                    {
+                        foreach (string s in remoteAddresses.Split(','))
+                            currentlyBannedIPs.Add(s.Contains("-") ? s.Split('-')[0] : s);
+                    }
                 }
+            }
+            finally
+            {
+                ReleaseComObject(fwRule);
             }
 
             return currentlyBannedIPs;
@@ -199,13 +225,7 @@ namespace EvlWatcher.SystemAPI
                     // TODO: dispose managed state (managed objects)
                 }
 
-                if (_fwRule != null)
-                {
-                    Marshal.ReleaseComObject(_fwRule);
-                    _fwRule = null;
-                }
-
-                if (_fwPolicy2 == null)
+                if (_fwPolicy2 != null)
                 {
                     Marshal.ReleaseComObject(_fwPolicy2);
                     _fwPolicy2 = null;

@@ -75,13 +75,35 @@ namespace EvlWatcher.Config
 
         #region private operations
 
+        private XElement FindTaskElement(XDocument d)
+        {
+            XElement taskEl = d.Root.Descendants("Task").Where(t => t.Attribute("Name") != null && t.Attribute("Name").Value == TaskName).FirstOrDefault();
+            if (taskEl == null)
+            {
+                throw new FormatException($"No configuration node for task {TaskName}");
+            }
+            return taskEl;
+        }
+
+        private void WriteTaskAttribute(string attribute, string value)
+        {
+            lock (_syncObject)
+            {
+                _logger.Dump($"Writing task config for task {TaskName}: {attribute} = {value}", SeverityLevel.Verbose);
+
+                XDocument d = XDocument.Load(ConfigFile.Path);
+                FindTaskElement(d).SetAttributeValue(attribute, value);
+                ConfigFile.Save(d);
+            }
+        }
+
         private void WriteTaskConfig(string property, string value)
         {
             lock (_syncObject)
             {
                 _logger.Dump($"Writing task config for task {TaskName}: {property} = {value}", SeverityLevel.Verbose);
 
-                XDocument d = XDocument.Load(Assembly.GetExecutingAssembly().Location.Replace("EvlWatcher.exe", "config.xml"));
+                XDocument d = XDocument.Load(ConfigFile.Path);
                 XElement taskEl = d.Root.Descendants("Task").Where(t => t.Attribute("Name")!= null && t.Attribute("Name").Value == TaskName).FirstOrDefault();
                 if (taskEl == null)
                 {
@@ -101,7 +123,7 @@ namespace EvlWatcher.Config
                     }
 
                 }
-                d.Save(Assembly.GetExecutingAssembly().Location.Replace("EvlWatcher.exe", "config.xml"));
+                ConfigFile.Save(d);
             }
         }
 
@@ -238,9 +260,16 @@ namespace EvlWatcher.Config
         public bool Active
         {
             get => _active;
-            private set
+            set
             {
-                _active = value;
+                if (_active != value)
+                {
+                    _active = value;
+                    if (!_isLoading)
+                    {
+                        WriteTaskAttribute("Active", value ? "true" : "false");
+                    }
+                }
             }
         }
 
@@ -257,6 +286,31 @@ namespace EvlWatcher.Config
             }
 
             return false;
+        }
+
+        public void SetRegexBoosters(IEnumerable<string> boosters)
+        {
+            lock (_syncObject)
+            {
+                var list = boosters.ToList();
+                _logger.Dump($"Writing task config for task {TaskName}: {list.Count} regex boosters", SeverityLevel.Verbose);
+
+                XDocument d = XDocument.Load(ConfigFile.Path);
+                XElement taskEl = FindTaskElement(d);
+                XElement boostersEl = taskEl.Element("RegexBoosters");
+                if (boostersEl == null)
+                {
+                    boostersEl = new XElement("RegexBoosters");
+                    taskEl.Add(boostersEl);
+                }
+                boostersEl.RemoveNodes();
+                foreach (var booster in list)
+                    boostersEl.Add(new XElement("Booster", booster));
+                ConfigFile.Save(d);
+
+                _regexBoosters.Clear();
+                _regexBoosters.AddRange(list);
+            }
         }
 
         public bool RemoveRegexBooster(string regexBooster)

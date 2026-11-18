@@ -23,3 +23,8 @@
 
 
 
+
+# build output of all projects (incl. the test projects added in v3.0)
+[Bb]in/
+[Oo]bj/
+TestResults/

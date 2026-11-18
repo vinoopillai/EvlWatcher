@@ -56,7 +56,7 @@
 			<EventPath>
 				Microsoft-Windows-SMBServer/Security
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>SMB Session Authentication Failure</Booster>
 			</RegexBoosters>
@@ -108,7 +108,7 @@
 				Security
 			</EventPath>
 
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>4625</Booster>
 				<Booster>IpAddress</Booster>
@@ -164,7 +164,7 @@
 				Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational
 			</EventPath>
 
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>140</Booster>
 				<Booster>IPString</Booster>
@@ -219,7 +219,7 @@
 				Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational
 			</EventPath>
 
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>131</Booster>
 				<Booster>ClientIP</Booster>
@@ -269,7 +269,7 @@
 			<EventPath>
 				Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>131</Booster>
 				<Booster>ClientIP</Booster>
@@ -315,7 +315,7 @@
 			<EventPath>
 				Application
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>100</Booster>
 			</RegexBoosters>
@@ -360,7 +360,7 @@
 			<EventPath>
 				OpenSSH/Operational
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>Failed password</Booster>
 			</RegexBoosters>
@@ -412,7 +412,7 @@
 				Application
 			</EventPath>
 
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>1035</Booster>
 				<Booster>MSExchangeFrontEndTransport</Booster>
@@ -461,7 +461,7 @@
 			<EventPath>
 				Application
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>Password did not match that for the login provided</Booster>
 			</RegexBoosters>
@@ -505,7 +505,7 @@
 			<EventPath>
 				Security
 			</EventPath>
-			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words that MUST be contained in the LogEntry to undergo the regex inspection-->
+			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
 				<Booster>6273</Booster>
 				<Booster>CallingStationID</Booster>

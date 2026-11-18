@@ -56,6 +56,11 @@ namespace EvlWatcher.WCF.DTO
         public IList<string> RegexBoosters { get; set; }
 
         /// <summary>
+        /// event logs from EventPath that do not exist on this machine (filled by the service when reading rules)
+        /// </summary>
+        public IList<string> MissingEventLogs { get; set; }
+
+        /// <summary>
         /// the regex used to extract an attackers IP address.
         /// </summary>
         public string Regex { get; set; }

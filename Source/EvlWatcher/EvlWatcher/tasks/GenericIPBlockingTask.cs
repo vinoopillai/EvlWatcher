@@ -26,7 +26,8 @@ namespace EvlWatcher.Tasks
                 PermaBanCount = configuration.PermaBanCount,
                 EventPath = configuration.EventPath.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries),
                 Boosters = configuration.RegexBoosters.ToList(),
-                Regex = new Regex(configuration.Regex, RegexOptions.Compiled)
+                Regex = new Regex(configuration.Regex, RegexOptions.Compiled),
+                Active = configuration.Active
             };
 
             return t;
@@ -60,6 +61,39 @@ namespace EvlWatcher.Tasks
         public int PermaBanCount { get; set; } = 3;
         public int TriggerCount { get; set; } = 5;
         public Regex Regex { get; set; } = null;
+
+        #endregion
+
+        #region internal operations
+
+        /// <summary>
+        /// Copies temporary bans, strike counts and "forgotten" IPs from a previous instance of the same rule,
+        /// so a rule reload does not lose in-memory state (and re-ban IPs an admin un-banned).
+        /// </summary>
+        internal void CarryOverStateFrom(GenericIPBlockingTask previous)
+        {
+            if (previous == null)
+                throw new ArgumentNullException(nameof(previous));
+            if (ReferenceEquals(previous, this))
+                return;
+
+            lock (previous._syncObject)
+            {
+                lock (_syncObject)
+                {
+                    Copy(previous._blockedIPsToDate, _blockedIPsToDate);
+                    Copy(previous._bannedCount, _bannedCount);
+                    Copy(previous._forgetIPsToDate, _forgetIPsToDate);
+                }
+            }
+        }
+
+        private static void Copy<TValue>(Dictionary<IPAddress, TValue> source, Dictionary<IPAddress, TValue> target)
+        {
+            target.Clear();
+            foreach (KeyValuePair<IPAddress, TValue> kvp in source)
+                target[kvp.Key] = kvp.Value;
+        }
 
         #endregion
 

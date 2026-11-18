@@ -5,7 +5,8 @@ namespace EvlWatcher.WCF.DTO
 
     public enum ServiceErorCode
     {
-        clientNotAdministrator = 01
+        clientNotAdministrator = 01,
+        invalidRule = 02
     } 
 
     [DataContract]
@@ -15,6 +16,7 @@ namespace EvlWatcher.WCF.DTO
         /// Fault Code List
         /// 
         /// 01 - Client is not an Administrator, Client will be stopped!
+        /// 02 - A rule failed validation, Message lists the problems
         /// 
         /// </summary>
 

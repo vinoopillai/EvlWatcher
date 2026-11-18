@@ -60,6 +60,20 @@ namespace EvlWatcher.Config
         bool RemoveBlackListAddress(IPAddress address);
 
         /// <summary>
+        /// appends a new, inactive task with default values to the configuration
+        /// </summary>
+        /// <param name="taskName"></param>
+        /// <returns>the loaded task configuration, to set its properties</returns>
+        /// <exception cref="System.InvalidOperationException">a task with this name already exists</exception>
+        IPersistentTaskConfiguration AddTask(string taskName);
+
+        /// <summary>
+        /// removes a task (used to roll back a half-saved new rule)
+        /// </summary>
+        /// <returns>true when a task was removed</returns>
+        bool RemoveTask(string taskName);
+
+        /// <summary>
         /// forced the configuration to be reloaded, in case of external changes.
         /// </summary>
         void Load();

@@ -195,6 +195,64 @@ namespace EvlWatcher.Config
             return changed;
         }
 
+        public IPersistentTaskConfiguration AddTask(string taskName)
+        {
+            lock (_syncObject)
+            {
+                XDocument d = XDocument.Load(ConfigFile.Path);
+
+                if (d.Descendants("Task").Any(t => t.Attribute("Name") != null && t.Attribute("Name").Value.Trim() == taskName.Trim()))
+                    throw new InvalidOperationException($"A task named \"{taskName}\" already exists");
+
+                XElement tasks = d.Root.Element("Tasks");
+                if (tasks == null)
+                {
+                    tasks = new XElement("Tasks");
+                    d.Root.Add(tasks);
+                }
+
+                var taskEl = new XElement("Task",
+                    new XAttribute("Name", taskName),
+                    new XAttribute("Active", "false"),
+                    new XElement("Description", ""),
+                    new XElement("LockTime", "3600"),
+                    new XElement("OnlyNew", "False"),
+                    new XElement("EventAge", "120"),
+                    new XElement("TriggerCount", "5"),
+                    new XElement("PermaBanCount", "3"),
+                    new XElement("EventPath", ""),
+                    new XElement("RegexBoosters"),
+                    new XElement("Regex", ""));
+                tasks.Add(taskEl);
+                ConfigFile.Save(d);
+
+                var loadedTask = XmlTaskConfig.FromXmlElement(taskEl, _syncObject, _logger);
+                _taskConfigurations.Add(loadedTask);
+                _logger.Dump($"added configuration for generic task \"{taskName}\"", SeverityLevel.Debug);
+                return loadedTask;
+            }
+        }
+
+        public bool RemoveTask(string taskName)
+        {
+            lock (_syncObject)
+            {
+                XDocument d = XDocument.Load(ConfigFile.Path);
+                XElement taskEl = d.Descendants("Task")
+                    .FirstOrDefault(t => t.Attribute("Name") != null && t.Attribute("Name").Value.Trim() == (taskName ?? string.Empty).Trim());
+                if (taskEl == null)
+                    return false;
+
+                taskEl.Remove();
+                ConfigFile.Save(d);
+
+                foreach (var t in _taskConfigurations.Where(c => (c.TaskName ?? string.Empty).Trim() == taskName.Trim()).ToList())
+                    _taskConfigurations.Remove(t);
+                _logger.Dump($"removed configuration for generic task \"{taskName}\"", SeverityLevel.Debug);
+                return true;
+            }
+        }
+
         #endregion
 
         #region private operations
@@ -205,7 +263,7 @@ namespace EvlWatcher.Config
             {
                 _logger.Dump($"Writing global config for: {property} = {value}", SeverityLevel.Verbose);
 
-                XDocument d = XDocument.Load(Assembly.GetExecutingAssembly().Location.Replace("EvlWatcher.exe", "config.xml"));
+                XDocument d = XDocument.Load(ConfigFile.Path);
                 XElement taskEl = d.Root.Element("Global");
                 if (taskEl == null)
                 {
@@ -226,10 +284,14 @@ namespace EvlWatcher.Config
                     }
 
                 }
-                d.Save(Assembly.GetExecutingAssembly().Location.Replace("EvlWatcher.exe", "config.xml"));
+                ConfigFile.Save(d);
             }
         }
 
+        /// <summary>
+        /// Loads atomically: everything is parsed into locals first, the live state is only replaced once all of it parsed.
+        /// If anything throws, the previously loaded state stays untouched.
+        /// </summary>
         private void LoadConfiguration()
         {
             lock (_syncObject)
@@ -237,107 +299,114 @@ namespace EvlWatcher.Config
                 try
                 {
                     _inLoading = true;
-                    XDocument d = XDocument.Load(Assembly.GetExecutingAssembly().Location.Replace("EvlWatcher.exe", "config.xml"));
+                    XDocument d = XDocument.Load(ConfigFile.Path);
 
                     //this line probably wont get displayed, unless debug is default before loading the config.
                     _logger.Dump($"now loading global settings", SeverityLevel.Debug);
 
-                    LoadGlobalSettings(d);
-                    //from now on, the log/output levels should work.
-                    _logger.Dump($"finished loading global settings", SeverityLevel.Debug);
+                    XElement globalConfig = d.Root.Element("Global");
+                    if (globalConfig == null)
+                    {
+                        _logger.Dump("Global Service config could not be loaded", SeverityLevel.Critical);
+                        throw new FormatException();
+                    }
 
+                    SeverityLevel? logLevel = null;
+                    XElement logLevelElement = globalConfig.Element("LogLevel");
+                    if (logLevelElement != null)
+                        logLevel = GetLogLevelFromString(logLevelElement.Value);
+
+                    int? checkInterval = null;
+                    XElement checkIntervalElement = globalConfig.Element("CheckInterval");
+                    if (checkIntervalElement != null)
+                        checkInterval = int.Parse(checkIntervalElement.Value);
+
+                    List<IPAddress> newBlacklist = null;
+                    XElement banlist = globalConfig.Element("Banlist");
+                    if (banlist != null)
+                    {
+                        newBlacklist = new List<IPAddress>();
+                        foreach (string ip in banlist.Value.Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries))
+                            newBlacklist.Add(IPAddress.Parse(ip));
+                    }
+
+                    // a missing <Banlist>/<WhiteList> element deliberately keeps the previously loaded list (null = untouched)
+                    List<string> newWhitelist = null;
+                    XElement whitelist = globalConfig.Element("WhiteList");
+                    if (whitelist != null)
+                        newWhitelist = whitelist.Value.Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+                    int? consoleBacklog = null;
+                    XElement consoleBacklogElement = globalConfig.Element("ConsoleBacklog");
+                    if (consoleBacklogElement != null)
+                        consoleBacklog = int.Parse(consoleBacklogElement.Value);
+
+                    var newTasks = new List<IPersistentTaskConfiguration>();
+                    foreach (var taskNode in d.Descendants("Task").Where(t => t.Attribute("Name") != null))
+                    {
+                        try
+                        {
+                            //TODO: Dependency Injection
+                            newTasks.Add(XmlTaskConfig.FromXmlElement(taskNode, _syncObject, _logger));
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Dump(ex);
+                            throw;
+                        }
+                    }
+
+                    //everything parsed: from here on nothing throws on its own, swap the state in
+                    if (logLevel.HasValue)
+                        LogLevel = logLevel.Value;
+                    //from now on, the log/output levels should work.
+                    _logger.Dump($"Log level is set to : {LogLevel} ", SeverityLevel.Verbose);
+
+                    if (checkInterval.HasValue)
+                    {
+                        EventLogInterval = checkInterval.Value;
+                        _logger.Dump($"Check interval is set to : {EventLogInterval} s", SeverityLevel.Verbose);
+                    }
+
+                    if (newBlacklist != null)
+                    {
+                        //replace, do not append: a reload would otherwise duplicate the entries
+                        _blacklistAddresses.Clear();
+                        foreach (IPAddress ip in newBlacklist)
+                            _blacklistAddresses.Add(ip);
+                        _logger.Dump($"Loaded permabanlist: {banlist.Value}", SeverityLevel.Verbose);
+                    }
+
+                    if (newWhitelist != null)
+                    {
+                        _whiteListPatterns.Clear();
+                        foreach (string pattern in newWhitelist)
+                            _whiteListPatterns.Add(pattern);
+                        _logger.Dump($"Loaded whitelist: {whitelist.Value}", SeverityLevel.Verbose);
+                    }
+
+                    if (consoleBacklog.HasValue)
+                    {
+                        _consoleBacklog = consoleBacklog.Value;
+                        _logger.Dump($"Console backlog is set to {_consoleBacklog}", SeverityLevel.Verbose);
+                    }
+
+                    _logger.Dump($"finished loading global settings", SeverityLevel.Debug);
                     _logger.Dump($"now loading generic tasks", SeverityLevel.Debug);
 
-                    LoadGenericTasks(d);
+                    _taskConfigurations.Clear();
+                    foreach (var loadedTask in newTasks)
+                    {
+                        _taskConfigurations.Add(loadedTask);
+                        _logger.Dump($"loaded configuration for generic task \"{loadedTask.TaskName}\"({(loadedTask.Active ? "active" : "inactive")})", SeverityLevel.Debug);
+                    }
                     _logger.Dump($"finished loading generic tasks", SeverityLevel.Debug);
-
                 }
                 finally
                 {
                     _inLoading = false;
                 }
             }
-        }
-
-        private void LoadGenericTasks(XDocument d)
-        {
-            //clear in case of reload
-            _taskConfigurations.Clear();
-
-            foreach (var taskNode in d.Descendants("Task").Where(t => t.Attribute("Name") != null))
-            {
-                try
-                {
-                    //TODO: Dependency Injection
-                    var loadedTask = XmlTaskConfig.FromXmlElement(taskNode, _syncObject, _logger);
-
-                    _taskConfigurations.Add(loadedTask);
-                    _logger.Dump($"loaded configuration for generic task \"{loadedTask.TaskName}\"({(loadedTask.Active ? "active" : "inactive")})", SeverityLevel.Debug);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Dump(ex);
-                    throw;
-                }
-            }
-        }
-
-        private void LoadGlobalSettings(XDocument d)
-        {
-            XElement globalConfig = d.Root.Element("Global");
-
-            if (globalConfig == null)
-            {
-                _logger.Dump("Global Service config could not be loaded", SeverityLevel.Critical);
-                throw new FormatException();
-            }
-
-            XElement logLevelElement = globalConfig.Element("LogLevel");
-            if (logLevelElement != null)
-                LogLevel = GetLogLevelFromString(logLevelElement.Value);
-
-            _logger.Dump($"Log level is set to : {LogLevel} ", SeverityLevel.Verbose);
-
-            XElement checkIntervalElement = globalConfig.Element("CheckInterval");
-            if (checkIntervalElement != null)
-            {
-                EventLogInterval = int.Parse(checkIntervalElement.Value);
-
-                _logger.Dump($"Check interval is set to : {EventLogInterval} s", SeverityLevel.Verbose);
-            }
-
-            XElement banlist = globalConfig.Element("Banlist");
-            if (banlist != null)
-            {
-                string banstring = banlist.Value;
-                foreach (string ip in banstring.Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    _blacklistAddresses.Add(IPAddress.Parse(ip));
-
-                }
-
-                _logger.Dump($"Loaded permabanlist: {banstring}", SeverityLevel.Verbose);
-            }
-
-            XElement whitelist = globalConfig.Element("WhiteList");
-            if (whitelist != null)
-            {
-                string wstring = whitelist.Value;
-                foreach (string ipPattern in wstring.Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    _whiteListPatterns.Add(ipPattern);
-
-                }
-                _logger.Dump($"Loaded whitelist: {wstring}", SeverityLevel.Verbose);
-            }
-
-            XElement consoleBacklogElement = globalConfig.Element("ConsoleBacklog");
-            if(consoleBacklogElement!=null)
-            {
-                _consoleBacklog = int.Parse(consoleBacklogElement.Value);
-                _logger.Dump($"Console backlog is set to {_consoleBacklog}", SeverityLevel.Verbose);
-            }
-
         }
 
         private SeverityLevel GetLogLevelFromString(string value)

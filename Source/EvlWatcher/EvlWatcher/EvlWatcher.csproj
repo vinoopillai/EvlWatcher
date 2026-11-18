@@ -64,8 +64,11 @@
     <StartupObject>EvlWatcher.EvlWatcher</StartupObject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Config\ConfigFile.cs" />
     <Compile Include="Config\IPersistentServiceConfiguration.cs" />
     <Compile Include="Config\IPersistentTaskConfiguration.cs" />
+    <Compile Include="Config\RuleMapper.cs" />
+    <Compile Include="Config\RuleValidator.cs" />
     <Compile Include="Config\XmlServiceConfig.cs" />
     <Compile Include="Config\XmlTaskConfig.cs" />
     <Compile Include="Converter\SeverityToEventLogEntryType.cs" />

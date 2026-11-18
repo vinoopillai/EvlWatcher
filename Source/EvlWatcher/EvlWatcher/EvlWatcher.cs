@@ -55,6 +55,12 @@ namespace EvlWatcher
         private static readonly object _syncObject = new object();
 
         private volatile bool _stop = false;
+        private volatile bool _reloadRequested = false;
+
+        /// <summary>
+        /// wakes the worker thread from its inter-scan wait (stop or reload request); no Thread.Interrupt is used for that
+        /// </summary>
+        private readonly AutoResetEvent _wakeWorker = new AutoResetEvent(false);
 
         private bool IsClientAdministrator()
         {
@@ -91,7 +97,7 @@ namespace EvlWatcher
                 ConsoleBackLog = _serviceconfiguration.ConsoleBackLog,
                 EventLogInterval = _serviceconfiguration.EventLogInterval,
                 LogLevel = (SeverityLevelDTO)Enum.Parse(typeof(SeverityLevelDTO), _serviceconfiguration.LogLevel.ToString()),
-                GenericTaskConfigurations = _logTasks.Where(t => t is GenericIPBlockingTask).Select(t => (GenericIPBlockingTask)t).Select(ipt => new GenericIPBlockingTaskDTO() {
+                GenericTaskConfigurations = SnapshotLogTasks().Where(t => t is GenericIPBlockingTask).Select(t => (GenericIPBlockingTask)t).Select(ipt => new GenericIPBlockingTaskDTO() {
                     Active = ipt.Active,
                     Description = ipt.Description,
                     EventAge = ipt.EventAge,
@@ -115,13 +121,111 @@ namespace EvlWatcher
             return true;
         }
 
-        public IPAddress[] GetPermanentlyBannedIPs()
+        public GenericIPBlockingTaskDTO[] GetRules()
+        {
+            EnsureClientPrivileges();
+
+            HashSet<string> eventLogs = GetEventLogNames();
+
+            lock (_syncObject)
+            {
+                return _serviceconfiguration.TaskConfigurations
+                    .ToList()
+                    .Select(c => RuleMapper.ToDto(c, eventLogs.Contains))
+                    .ToArray();
+            }
+        }
+
+        public void SaveRule(GenericIPBlockingTaskDTO rule, bool isNew)
+        {
+            EnsureClientPrivileges();
+
+            if (rule == null)
+                throw InvalidRuleFault("No rule was supplied.");
+
+            HashSet<string> eventLogs = GetEventLogNames();
+
+            bool wrote = false;
+            try
+            {
+                lock (_syncObject)
+                {
+                    List<string> existingNames = _serviceconfiguration.TaskConfigurations.ToList().Select(c => c.TaskName).ToList();
+
+                    IList<string> errors = RuleValidator.Validate(rule, isNew, existingNames, eventLogs.Contains);
+                    if (errors.Count > 0)
+                        throw InvalidRuleFault(string.Join("\n", errors));
+
+                    string name = rule.TaskName.Trim();
+                    try
+                    {
+                        IPersistentTaskConfiguration target;
+                        if (isNew)
+                        {
+                            target = _serviceconfiguration.AddTask(name);
+                            wrote = true;
+                        }
+                        else
+                            target = _serviceconfiguration.TaskConfigurations.ToList().First(c => string.Equals((c.TaskName ?? string.Empty).Trim(), name, StringComparison.Ordinal));
+
+                        wrote = true;
+                        RuleMapper.Apply(rule, target);
+                    }
+                    catch (Exception e) when (!(e is FaultException))
+                    {
+                        _logger.Dump(e, SeverityLevel.Error);
+                        if (isNew && wrote)
+                        {
+                            // do not leave a disabled half-saved rule behind, a retry would say "already exists"
+                            try { _serviceconfiguration.RemoveTask(name); }
+                            catch (Exception rollbackError) { _logger.Dump(rollbackError, SeverityLevel.Error); }
+                        }
+                        throw InvalidRuleFault($"Saving the rule failed: {e.Message}. Check config.xml.");
+                    }
+                    _logger.Dump($"Saved rule \"{name}\" ({(isNew ? "new" : "updated")}), reloading rules", SeverityLevel.Info);
+                }
+            }
+            finally
+            {
+                if (wrote)
+                    RequestReload();
+            }
+        }
+
+        public void SetRuleActive(string taskName, bool active)
         {
             EnsureClientPrivileges();
 
             lock (_syncObject)
             {
-                return _serviceconfiguration.BlacklistAddresses.ToArray();
+                string name = (taskName ?? string.Empty).Trim();
+                IPersistentTaskConfiguration target = _serviceconfiguration.TaskConfigurations.ToList()
+                    .FirstOrDefault(c => string.Equals((c.TaskName ?? string.Empty).Trim(), name, StringComparison.Ordinal));
+                if (target == null)
+                    throw InvalidRuleFault($"The rule '{name}' does not exist.");
+
+                try
+                {
+                    target.Active = active;
+                }
+                catch (Exception e) when (!(e is FaultException))
+                {
+                    _logger.Dump(e, SeverityLevel.Error);
+                    throw InvalidRuleFault($"Turning the rule on or off failed: {e.Message}. Check config.xml.");
+                }
+                _logger.Dump($"Rule \"{name}\" set {(active ? "active" : "inactive")}, reloading rules", SeverityLevel.Info);
+            }
+
+            RequestReload();
+        }
+
+        public string[] GetPermanentlyBannedIPs()
+        {
+            EnsureClientPrivileges();
+
+            lock (_syncObject)
+            {
+                return _serviceconfiguration.BlacklistAddresses.Select(ip => ip.ToString()).ToArray();
             }
         }
 
@@ -137,18 +241,18 @@ namespace EvlWatcher
         /// WCF
         /// </summary>
         /// <param name="address"></param>
-        public void SetPermanentBan(IPAddress address)
+        public void SetPermanentBan(string address)
         {
             EnsureClientPrivileges();
 
-            SetPermanentBanInternal(new IPAddress[] { address });
+            SetPermanentBanInternal(new IPAddress[] { IPAddress.Parse(address) });
         }
 
-        public void ClearPermanentBan(IPAddress address)
+        public void ClearPermanentBan(string address)
         {
             EnsureClientPrivileges();
 
-            _serviceconfiguration.RemoveBlackListAddress(address);
+            _serviceconfiguration.RemoveBlackListAddress(IPAddress.Parse(address));
 
             PushBanList();
         }
@@ -171,7 +275,7 @@ namespace EvlWatcher
             PushBanList();
         }
 
-        public IPAddress[] GetTemporarilyBannedIPs()
+        public string[] GetTemporarilyBannedIPs()
         {
             EnsureClientPrivileges();
 
@@ -182,7 +286,7 @@ namespace EvlWatcher
                 result.RemoveAll(p => _serviceconfiguration.BlacklistAddresses.Contains(p));
                 result.RemoveAll(p => IsWhiteListed(p));
 
-                return result.ToArray();
+                return result.Select(ip => ip.ToString()).ToArray();
             }
         }
 
@@ -212,7 +316,8 @@ namespace EvlWatcher
 
             if (disposing)
             {
-                
+                _firewallApi.Dispose();
+                _wakeWorker.Dispose();
             }
 
             _disposed = true;
@@ -247,7 +352,7 @@ namespace EvlWatcher
             {
                 _stop = true;
             }
-            _workerThread.Interrupt();
+            _wakeWorker.Set();
 
             DateTime start = DateTime.Now;
 
@@ -294,19 +399,138 @@ namespace EvlWatcher
         }
 
         /// <summary>
-        /// creates generic log tasks from configuration
+        /// creates generic log tasks from configuration, returns them in a fresh list (the live list is untouched)
         /// </summary>
-        private void InitWorkersFromConfig(IQueryable<IPersistentTaskConfiguration> taskConfigurations)
+        private List<LogTask> InitWorkersFromConfig(IQueryable<IPersistentTaskConfiguration> taskConfigurations)
+        {
+            var result = new List<LogTask>();
+
+            lock (_syncObject)
+            {
+                List<IPersistentTaskConfiguration> configs = taskConfigurations.ToList();
+
+                foreach (var config in configs.Where(c => c.Active == false))
+                    _logger.Dump($"Skipped {config.TaskName} (set inactive)", SeverityLevel.Info);
+
+                foreach (var config in configs.Where(c => c.Active == true))
+                {
+                    try
+                    {
+                        result.Add(_genericTaskFactory.CreateFromConfiguration(config));
+                    }
+                    catch (Exception ex)
+                    {
+                        //a single broken rule (e.g. hand edited invalid regex) must not take the others down
+                        _logger.Dump($"Rule {config.TaskName} could not be loaded and is skipped:", SeverityLevel.Error);
+                        _logger.Dump(ex, SeverityLevel.Error);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// copy of the live task list, safe to iterate while WCF calls or a reload change the live one
+        /// </summary>
+        private List<LogTask> SnapshotLogTasks()
         {
             lock (_syncObject)
             {
-                foreach (var config in taskConfigurations.Where(c => c.Active == false))
-                    _logger.Dump($"Skipped {config.TaskName} (set inactive)", SeverityLevel.Info);
+                return _logTasks.ToList();
+            }
+        }
 
-                foreach (var config in taskConfigurations.Where(c => c.Active == true))
-                {
-                    _logTasks.Add(_genericTaskFactory.CreateFromConfiguration(config));
-                }
+        /// <summary>
+        /// the names of all event logs on this machine (case insensitive)
+        /// </summary>
+        private static HashSet<string> GetEventLogNames()
+        {
+            using (var session = new EventLogSession())
+            {
+                return new HashSet<string>(session.GetLogNames(), StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        private static FaultException<ServiceFaultDTO> InvalidRuleFault(string message)
+        {
+            return new FaultException<ServiceFaultDTO>(new ServiceFaultDTO(ServiceErorCode.invalidRule, message), "invalid rule");
+        }
+
+        /// <summary>
+        /// asks the worker thread to reload the configuration (without touching the firewall) and wakes it up
+        /// </summary>
+        private void RequestReload()
+        {
+            lock (_syncObject)
+            {
+                _reloadRequested = true;
+                _wakeWorker.Set();
+            }
+        }
+
+        /// <summary>
+        /// Copies the in-memory ban state of every generic task in <paramref name="oldTasks"/> to the task with the same name in
+        /// <paramref name="newTasks"/>. Tasks without a counterpart, and tasks that are not <see cref="GenericIPBlockingTask"/>, are ignored.
+        /// </summary>
+        internal static void CarryOverByName(IEnumerable<LogTask> oldTasks, IEnumerable<LogTask> newTasks)
+        {
+            var previousByName = new Dictionary<string, GenericIPBlockingTask>();
+            foreach (GenericIPBlockingTask previous in oldTasks.OfType<GenericIPBlockingTask>())
+                previousByName[previous.Name] = previous;
+
+            foreach (GenericIPBlockingTask fresh in newTasks.OfType<GenericIPBlockingTask>())
+            {
+                if (fresh.Name != null && previousByName.TryGetValue(fresh.Name, out GenericIPBlockingTask old))
+                    fresh.CarryOverStateFrom(old);
+            }
+        }
+
+        /// <summary>
+        /// reports the control flags
+        /// </summary>
+        private void ReadControlFlags(out bool stop, out bool reload)
+        {
+            lock (_syncObject)
+            {
+                stop = _stop;
+                reload = _reloadRequested;
+            }
+        }
+
+        /// <summary>
+        /// reloads the configuration and swaps the live task list. Ban state is carried over by rule name, the firewall is never touched.
+        /// </summary>
+        private void ReloadTasks()
+        {
+            lock (_syncObject)
+            {
+                _reloadRequested = false;
+                _wakeWorker.Reset();
+
+                //reload configuration in case of external changes
+                _serviceconfiguration.Load();
+
+                //create generic tasks from configuration
+                List<LogTask> newTasks = InitWorkersFromConfig(_serviceconfiguration.TaskConfigurations);
+
+                //swap in one step so a WCF call never sees a task set without its ban state
+                CarryOverByName(_logTasks, newTasks);
+                _logTasks.Clear();
+                _logTasks.AddRange(newTasks);
+                _logTasksPerfWarningIssued.Clear();
+            }
+        }
+
+        private void ClearFirewallOnStop()
+        {
+            try
+            {
+                _firewallApi.ClearIPBanList();
+            }
+            catch (Exception ex)
+            {
+                _logger.Dump(ex, SeverityLevel.Warning);
             }
         }
 
@@ -354,220 +578,243 @@ namespace EvlWatcher
             return regex.IsMatch(s);
         }
 
+        /// <summary>
+        /// Worker thread. Outer loop: (re)load rules and swap the task set, inner loop: scan, poll, push bans, sleep.
+        /// A reload request leaves the inner loop and starts the outer loop again, it never touches the firewall.
+        /// Only a stop request clears the firewall.
+        /// </summary>
         private void Run()
         {
-            //reload configuration in case of external changes
-            _serviceconfiguration.Load();
-
-            //create generic tasks from configuration
-            InitWorkersFromConfig(_serviceconfiguration.TaskConfigurations);
-
             try
             {
-                //prepare datastructures
-                Dictionary<string, List<LogTask>> requiredEventTypesToLogTasks = new Dictionary<string, List<LogTask>>();
-                foreach (LogTask l in _logTasks)
-                {
-                    foreach (string s in l.EventPath)
-                    {
-                        if (!requiredEventTypesToLogTasks.ContainsKey(s))
-                            requiredEventTypesToLogTasks[s] = new List<LogTask>();
-
-                        requiredEventTypesToLogTasks[s].Add(l);
-                    }
-                }
-
+                //survives reloads so OnlyNew tasks do not miss events of the reload window
                 var eventTypesToLastEvent = new Dictionary<string, DateTime>();
-                var eventTypesToMaxAge = new Dictionary<string, int>();
-                var eventTypesToNewEvents = new Dictionary<string, List<ExtractedEventRecord>>();
-                var eventTypesToTimeFramedEvents = new Dictionary<string, List<ExtractedEventRecord>>();
+                bool loadedOnce = false;
 
-                //load structure so that only required events are read
-                foreach (string requiredEventType in requiredEventTypesToLogTasks.Keys)
-                {
-                    eventTypesToLastEvent.Add(requiredEventType, DateTime.Now);
-                    eventTypesToMaxAge.Add(requiredEventType, 0);
-                    foreach (LogTask t in requiredEventTypesToLogTasks[requiredEventType])
-                    {
-                        if (!t.OnlyNew && eventTypesToMaxAge[requiredEventType] < t.EventAge)
-                            eventTypesToMaxAge[requiredEventType] = t.EventAge;
-                    }
-                }
-
-                //start monitoring the logs
                 while (true)
                 {
-                    DateTime scanStart = DateTime.Now;
+                    bool stopRequested, reloadRequested;
+                    ReadControlFlags(out stopRequested, out reloadRequested);
+                    if (stopRequested)
+                    {
+                        ClearFirewallOnStop();
+                        return;
+                    }
 
-                    _logger.Dump($"Scanning the logs now.", SeverityLevel.Debug);
-                    
-
-                    DateTime referenceTimeForTimeFramedEvents = DateTime.Now;
+                    //reload configuration (also in case of external changes) and swap the task set
                     try
                     {
-                        eventTypesToNewEvents.Clear();
-                        eventTypesToTimeFramedEvents.Clear();
+                        ReloadTasks();
+                        loadedOnce = true;
+                    }
+                    catch (Exception loadException)
+                    {
+                        _logger.Dump(loadException, SeverityLevel.Error);
+                        if (!loadedOnce)
+                            throw;
 
-                        //first read all relevant events (events that are required by any of the tasks)
-                        foreach (string requiredEventType in requiredEventTypesToLogTasks.Keys.ToList())
+                        _logger.Dump("Reloading the rules failed, the previous rules stay in effect.", SeverityLevel.Error);
+                    }
+
+                    //prepare datastructures
+                    Dictionary<string, List<LogTask>> requiredEventTypesToLogTasks = new Dictionary<string, List<LogTask>>();
+                    foreach (LogTask l in SnapshotLogTasks())
+                    {
+                        foreach (string s in l.EventPath)
                         {
-                            _logger.Dump($"Scanning {requiredEventType}", SeverityLevel.Debug);
-                            eventTypesToNewEvents.Add(requiredEventType, new List<ExtractedEventRecord>());
-                            eventTypesToTimeFramedEvents.Add(requiredEventType, new List<ExtractedEventRecord>());
+                            if (!requiredEventTypesToLogTasks.ContainsKey(s))
+                                requiredEventTypesToLogTasks[s] = new List<LogTask>();
 
-                            var eventLogQuery = new EventLogQuery(requiredEventType, PathType.LogName)
-                            {
-                                ReverseDirection = true
-                            };
+                            requiredEventTypesToLogTasks[s].Add(l);
+                        }
+                    }
 
-                            try
+                    var eventTypesToMaxAge = new Dictionary<string, int>();
+                    var eventTypesToNewEvents = new Dictionary<string, List<ExtractedEventRecord>>();
+                    var eventTypesToTimeFramedEvents = new Dictionary<string, List<ExtractedEventRecord>>();
+
+                    //load structure so that only required events are read
+                    foreach (string requiredEventType in requiredEventTypesToLogTasks.Keys)
+                    {
+                        if (!eventTypesToLastEvent.ContainsKey(requiredEventType))
+                            eventTypesToLastEvent.Add(requiredEventType, DateTime.Now);
+                        eventTypesToMaxAge.Add(requiredEventType, 0);
+                        foreach (LogTask t in requiredEventTypesToLogTasks[requiredEventType])
+                        {
+                            if (!t.OnlyNew && eventTypesToMaxAge[requiredEventType] < t.EventAge)
+                                eventTypesToMaxAge[requiredEventType] = t.EventAge;
+                        }
+                    }
+
+                    //start monitoring the logs
+                    while (true)
+                    {
+                        DateTime scanStart = DateTime.Now;
+
+                        _logger.Dump($"Scanning the logs now.", SeverityLevel.Debug);
+                        
+
+                        DateTime referenceTimeForTimeFramedEvents = DateTime.Now;
+                        try
+                        {
+                            eventTypesToNewEvents.Clear();
+                            eventTypesToTimeFramedEvents.Clear();
+
+                            //first read all relevant events (events that are required by any of the tasks)
+                            foreach (string requiredEventType in requiredEventTypesToLogTasks.Keys.ToList())
                             {
-                                //if you crash here, you are not admin, try to restart as admin
-                                using (var eventLogReader = new EventLogReader(eventLogQuery))
+                                _logger.Dump($"Scanning {requiredEventType}", SeverityLevel.Debug);
+                                eventTypesToNewEvents.Add(requiredEventType, new List<ExtractedEventRecord>());
+                                eventTypesToTimeFramedEvents.Add(requiredEventType, new List<ExtractedEventRecord>());
+
+                                var eventLogQuery = new EventLogQuery(requiredEventType, PathType.LogName)
                                 {
-                                    EventRecord r;
+                                    ReverseDirection = true
+                                };
 
-                                    while ((r = eventLogReader.ReadEvent()) != null)
+                                try
+                                {
+                                    //if you crash here, you are not admin, try to restart as admin
+                                    using (var eventLogReader = new EventLogReader(eventLogQuery))
                                     {
-                                        //r.Dispose();
-                                        if (!r.TimeCreated.HasValue)
-                                            continue;
+                                        EventRecord r;
 
-                                        ExtractedEventRecord eer = new ExtractedEventRecord()
+                                        while ((r = eventLogReader.ReadEvent()) != null)
                                         {
-                                            TimeCreated = r.TimeCreated.Value,
-                                            Xml = r.ToXml()
-                                        };
+                                            //r.Dispose();
+                                            if (!r.TimeCreated.HasValue)
+                                                continue;
 
-                                        r.Dispose();
+                                            ExtractedEventRecord eer = new ExtractedEventRecord()
+                                            {
+                                                TimeCreated = r.TimeCreated.Value,
+                                                Xml = r.ToXml()
+                                            };
 
-                                        bool canbreak = false;
+                                            r.Dispose();
 
-                                        //fill new event list
-                                        if (r.TimeCreated > eventTypesToLastEvent[requiredEventType])
-                                        {
-                                            eventTypesToNewEvents[requiredEventType].Add(eer);
-                                            eventTypesToLastEvent[requiredEventType] = r.TimeCreated.Value;
+                                            bool canbreak = false;
+
+                                            //fill new event list
+                                            if (r.TimeCreated > eventTypesToLastEvent[requiredEventType])
+                                            {
+                                                eventTypesToNewEvents[requiredEventType].Add(eer);
+                                                eventTypesToLastEvent[requiredEventType] = r.TimeCreated.Value;
+                                            }
+                                            else
+                                                canbreak = true;
+
+                                            //fill time framed event list
+                                            if (r.TimeCreated > referenceTimeForTimeFramedEvents.Subtract(new TimeSpan(0, 0, eventTypesToMaxAge[requiredEventType])))
+                                                eventTypesToTimeFramedEvents[requiredEventType].Add(eer);
+                                            else if (canbreak)
+                                                break;
                                         }
-                                        else
-                                            canbreak = true;
-
-                                        //fill time framed event list
-                                        if (r.TimeCreated > referenceTimeForTimeFramedEvents.Subtract(new TimeSpan(0, 0, eventTypesToMaxAge[requiredEventType])))
-                                            eventTypesToTimeFramedEvents[requiredEventType].Add(eer);
-                                        else if (canbreak)
-                                            break;
                                     }
                                 }
-                            }
-                            catch (EventLogNotFoundException)
-                            {
-                                _logger.Dump($"Event Log {requiredEventType} was not found, tasks that require these events will not work and are disabled.", SeverityLevel.Info);
-                                _logTasks.RemoveAll(l => l.EventPath.Contains(requiredEventType));
-                                requiredEventTypesToLogTasks.Remove(requiredEventType);
-
-                            }
-                        }
-
-                        _logger.Dump($"Scanning finished in {DateTime.Now.Subtract(scanStart).TotalMilliseconds}[ms] ", SeverityLevel.Debug);
-
-                        //then supply the events to the requesting tasks
-                        foreach (string key in requiredEventTypesToLogTasks.Keys)
-                        {
-                            foreach (LogTask t in requiredEventTypesToLogTasks[key])
-                            {
-                                if (t.OnlyNew)
-                                    t.ProvideEvents(eventTypesToNewEvents[key]);
-                                else
+                                catch (EventLogNotFoundException)
                                 {
-                                    var eventsForThisTask = new List<ExtractedEventRecord>();
-                                    foreach (ExtractedEventRecord e in eventTypesToTimeFramedEvents[key])
+                                    _logger.Dump($"Event Log {requiredEventType} was not found, tasks that require these events will not work and are disabled.", SeverityLevel.Info);
+                                    lock (_syncObject)
                                     {
-                                        if (e.TimeCreated > referenceTimeForTimeFramedEvents.Subtract(new TimeSpan(0, 0, t.EventAge)))
-                                            eventsForThisTask.Add(e);
+                                        _logTasks.RemoveAll(l => l.EventPath.Contains(requiredEventType));
                                     }
+                                    requiredEventTypesToLogTasks.Remove(requiredEventType);
 
-                                    if (eventsForThisTask.Count > 0)
-                                        _logger.Dump($"Provided {eventsForThisTask.Count} events for {t.Name}", SeverityLevel.Verbose);
+                                }
+                            }
 
-                                    if (eventsForThisTask.Count > 0)
+                            _logger.Dump($"Scanning finished in {DateTime.Now.Subtract(scanStart).TotalMilliseconds}[ms] ", SeverityLevel.Debug);
+
+                            //then supply the events to the requesting tasks
+                            foreach (string key in requiredEventTypesToLogTasks.Keys)
+                            {
+                                foreach (LogTask t in requiredEventTypesToLogTasks[key])
+                                {
+                                    if (t.OnlyNew)
+                                        t.ProvideEvents(eventTypesToNewEvents[key]);
+                                    else
                                     {
-                                        var start = Stopwatch.GetTimestamp();
-
-                                        t.ProvideEvents(eventsForThisTask);
-
-                                        var end = Stopwatch.GetTimestamp();
-
-                                        if (end - start > 50000000)
+                                        var eventsForThisTask = new List<ExtractedEventRecord>();
+                                        foreach (ExtractedEventRecord e in eventTypesToTimeFramedEvents[key])
                                         {
-                                            if (!_logTasksPerfWarningIssued.ContainsKey(t) || DateTime.Now > _logTasksPerfWarningIssued[t].AddHours(24))
+                                            if (e.TimeCreated > referenceTimeForTimeFramedEvents.Subtract(new TimeSpan(0, 0, t.EventAge)))
+                                                eventsForThisTask.Add(e);
+                                        }
+
+                                        if (eventsForThisTask.Count > 0)
+                                            _logger.Dump($"Provided {eventsForThisTask.Count} events for {t.Name}", SeverityLevel.Verbose);
+
+                                        if (eventsForThisTask.Count > 0)
+                                        {
+                                            var start = Stopwatch.GetTimestamp();
+
+                                            t.ProvideEvents(eventsForThisTask);
+
+                                            var end = Stopwatch.GetTimestamp();
+
+                                            if (end - start > 50000000)
                                             {
-                                                _logger.Dump($"Warning: Task {t.Name} takes a lot of resources. This can have different reasons, maybe you get a lot of events (problems in domain configuration, stale hidden credentials..), or the event processing is too slow. This can cause EvlWatcher to produce CPU spikes. Try better boosters, or try to find the root problem,", SeverityLevel.Warning);
-                                                _logTasksPerfWarningIssued[t] = DateTime.Now;
+                                                if (!_logTasksPerfWarningIssued.ContainsKey(t) || DateTime.Now > _logTasksPerfWarningIssued[t].AddHours(24))
+                                                {
+                                                    _logger.Dump($"Warning: Task {t.Name} takes a lot of resources. This can have different reasons, maybe you get a lot of events (problems in domain configuration, stale hidden credentials..), or the event processing is too slow. This can cause EvlWatcher to produce CPU spikes. Try better boosters, or try to find the root problem,", SeverityLevel.Warning);
+                                                    _logTasksPerfWarningIssued[t] = DateTime.Now;
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        List<IPAddress> polledTempBansOfThisCycle = new List<IPAddress>();
-                        List<IPAddress> polledPermaBansOfThisCycle = new List<IPAddress>();
+                            List<IPAddress> polledTempBansOfThisCycle = new List<IPAddress>();
+                            List<IPAddress> polledPermaBansOfThisCycle = new List<IPAddress>();
 
-                        //let the tasks poll which ips they want to have blocked / or permanently banned
-                        foreach (LogTask t in _logTasks)
-                        {
-                            if (t is IPBlockingLogTask ipTask)
+                            //let the tasks poll which ips they want to have blocked / or permanently banned
+                            foreach (LogTask t in SnapshotLogTasks())
                             {
-                                List<IPAddress> polledTempBansOfThisTask = ipTask.GetTempBanVictims();
-                                List<IPAddress> polledPermaBansOfThisTask = ipTask.GetPermaBanVictims();
+                                if (t is IPBlockingLogTask ipTask)
+                                {
+                                    List<IPAddress> polledTempBansOfThisTask = ipTask.GetTempBanVictims();
+                                    List<IPAddress> polledPermaBansOfThisTask = ipTask.GetPermaBanVictims();
 
-                                _logger.Dump($"Polled {t.Name} and got {polledTempBansOfThisTask.Where(p => !IsWhiteListed(p)).Count()} temporary and {polledPermaBansOfThisTask.Where(p => !IsWhiteListed(p)).Count()} permanent ban(s)", SeverityLevel.Verbose);
+                                    _logger.Dump($"Polled {t.Name} and got {polledTempBansOfThisTask.Where(p => !IsWhiteListed(p)).Count()} temporary and {polledPermaBansOfThisTask.Where(p => !IsWhiteListed(p)).Count()} permanent ban(s)", SeverityLevel.Verbose);
 
-                                polledPermaBansOfThisCycle.AddRange(polledPermaBansOfThisTask.Where(ip => !polledPermaBansOfThisCycle.Contains(ip)).ToList());
-                                polledTempBansOfThisCycle.AddRange(polledTempBansOfThisTask.Where(ip => !polledTempBansOfThisCycle.Contains(ip)).ToList());
+                                    polledPermaBansOfThisCycle.AddRange(polledPermaBansOfThisTask.Where(ip => !polledPermaBansOfThisCycle.Contains(ip)).ToList());
+                                    polledTempBansOfThisCycle.AddRange(polledTempBansOfThisTask.Where(ip => !polledTempBansOfThisCycle.Contains(ip)).ToList());
+                                }
                             }
+
+                            _logger.Dump($"\r\n-----Cycle complete, sleeping {_serviceconfiguration.EventLogInterval} s......\r\n", SeverityLevel.Debug);
+
+                            SetPermanentBanInternal(polledPermaBansOfThisCycle.Where(p => !IsWhiteListed(p)).ToArray(), pushBanList: false);
+                            _lastPolledTempBans = polledTempBansOfThisCycle;
+                            
+                            PushBanList();
                         }
-
-                        _logger.Dump($"\r\n-----Cycle complete, sleeping {_serviceconfiguration.EventLogInterval} s......\r\n", SeverityLevel.Debug);
-
-                        SetPermanentBanInternal(polledPermaBansOfThisCycle.Where(p => !IsWhiteListed(p)).ToArray(), pushBanList: false);
-                        _lastPolledTempBans = polledTempBansOfThisCycle;
-                        
-                        PushBanList();
-                    }
-                    catch (Exception executionException)
-                    {
-                        _logger.Dump(executionException, SeverityLevel.Error);
-                    }
-
-                    //wait for next iteration or kill signal
-                    try
-                    {
-                        Thread.Sleep(_serviceconfiguration.EventLogInterval * 1000);
-                    }
-                    catch (ThreadInterruptedException)
-                    {
-
-                    }
-
-                    //check if need to terminate
-                    bool terminate;
-                    lock (_syncObject)
-                    {
-                        terminate = _stop;
-                    }
-                    if (terminate)
-                    {
-                        try
+                        catch (Exception executionException)
                         {
-                            _firewallApi.ClearIPBanList();
+                            _logger.Dump(executionException, SeverityLevel.Error);
                         }
-                        catch (Exception ex)
+
+                        //wait for next iteration, kill signal or reload request (an already pending request skips the sleep)
+                        ReadControlFlags(out stopRequested, out reloadRequested);
+                        if (!stopRequested && !reloadRequested)
                         {
-                            _logger.Dump(ex, SeverityLevel.Warning);
+                            _wakeWorker.WaitOne(TimeSpan.FromSeconds(_serviceconfiguration.EventLogInterval));
+
+                            ReadControlFlags(out stopRequested, out reloadRequested);
                         }
-                        return;
+
+                        //stop wins over reload; this is the only path that clears the firewall
+                        if (stopRequested)
+                        {
+                            ClearFirewallOnStop();
+                            return;
+                        }
+
+                        //reload: no firewall call, bans carry over
+                        if (reloadRequested)
+                            break;
                     }
                 }
             }
@@ -615,14 +862,18 @@ namespace EvlWatcher
 
         public void SaveGlobalConfig(SeverityLevelDTO logLevel, int consoleBackLog, int checkInterval)
         {
+            EnsureClientPrivileges();
+
             _serviceconfiguration.LogLevel = (SeverityLevel) Enum.Parse(typeof(SeverityLevel), logLevel.ToString());
             _serviceconfiguration.ConsoleBackLog = consoleBackLog;
             _serviceconfiguration.EventLogInterval = checkInterval;
         }
 
-        public void RemoveTemporaryBan(IPAddress address)
+        public void RemoveTemporaryBan(string addressString)
         {
             EnsureClientPrivileges();
+
+            IPAddress address = IPAddress.Parse(addressString);
 
             lock (_syncObject)
             {
@@ -636,11 +887,11 @@ namespace EvlWatcher
             }
         }
 
-        public void SetPermanentBans(IPAddress[] addressList)
+        public void SetPermanentBans(string[] addresses)
         {
             EnsureClientPrivileges();
 
-            SetPermanentBanInternal(addressList);
+            SetPermanentBanInternal(addresses.Select(IPAddress.Parse).ToArray());
         }
 
         #endregion

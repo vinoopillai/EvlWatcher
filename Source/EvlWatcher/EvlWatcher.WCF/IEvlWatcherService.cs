@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.ServiceModel;
-using System.Net;
 using EvlWatcher.WCF.DTO;
 
 namespace EvlWatcher.WCF
@@ -16,19 +15,19 @@ namespace EvlWatcher.WCF
         bool GetIsRunning();
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        IPAddress[] GetTemporarilyBannedIPs();
+        string[] GetTemporarilyBannedIPs();
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        IPAddress[] GetPermanentlyBannedIPs();
+        string[] GetPermanentlyBannedIPs();
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        void SetPermanentBan(IPAddress address);
+        void SetPermanentBan(string address);
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        void SetPermanentBans(IPAddress[] address);
+        void SetPermanentBans(string[] addresses);
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        void ClearPermanentBan(IPAddress address);
+        void ClearPermanentBan(string address);
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
         void AddWhiteListEntry(string filter);
@@ -48,6 +47,18 @@ namespace EvlWatcher.WCF
 
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
-        void RemoveTemporaryBan(IPAddress address);
+        void RemoveTemporaryBan(string address);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        GenericIPBlockingTaskDTO[] GetRules();
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        void SaveRule(GenericIPBlockingTaskDTO rule, bool isNew);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        void SetRuleActive(string taskName, bool active);
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace EvlWatcher.Config
 {
@@ -7,7 +8,7 @@ namespace EvlWatcher.Config
         /// <summary>
         /// indicates whether the task is active
         /// </summary>
-        bool Active { get; }
+        bool Active { get; set; }
 
         /// <summary>
         /// the name of the tasks
@@ -67,6 +68,12 @@ namespace EvlWatcher.Config
         /// <param name="regexBooster"></param>
         /// <returns></returns>
         bool RemoveRegexBooster(string regexBooster);
+
+        /// <summary>
+        /// replaces all regex boosters with the given ones and persists them
+        /// </summary>
+        /// <param name="boosters"></param>
+        void SetRegexBoosters(IEnumerable<string> boosters);
 
         /// <summary>
         /// the regex used to extract an attackers IP address.
