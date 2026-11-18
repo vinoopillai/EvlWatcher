@@ -1,5 +1,11 @@
 ## NEWS 
 
+### 2026-11-18 preparing the release of v3.0
+- new "Rules" tab: switch rules on/off and tune them in plain language
+- new "New rule from an event" wizard: paste an event, EvlWatcher finds the IP and builds, tests and saves the rule
+- rule changes apply live, without restarting the service, and keep existing bans
+- console moved to .NET 10 with a Fluent look (needs the .NET 10 Desktop Runtime); upgrades keep your config.xml
+
 ### 2024-05-23 release of v.2.1.62 was completed
 - that heisenbug that caused "enumeration changed" errors was fixed
 - turns out, the bug was difficult to reproduce because it happens exactly one hour after manually removing ips from the temporary ban list

@@ -8,7 +8,7 @@ It's basically a fail2ban for windows. Its goals are also mainly what we love ab
 - *no-initial-fucking-around-with-scripts-or-config-files*
 - *install-and-forget*
 
-You can download it [here](https://github.com/devnulli/EvlWatcher/raw/master/Versions/v2/EvlWatcher-v2.1.62-setup.exe) ( v2.1.62 - May 2024 ) .
+You can download it [here](https://github.com/devnulli/EvlWatcher/raw/master/Versions/v3/EvlWatcher-v3.0.0-setup.exe) ( v3.0 - November 2026 ) .
 
 ## Also, we love issues!
 
@@ -83,7 +83,13 @@ Shows you what the service is doing and what it is currently thinking about.
 
 ![image](https://user-images.githubusercontent.com/3720480/98728386-bb0b9900-2399-11eb-9792-d3e770334316.png)
 
-### Rule Tester Tab
+### Rules Tab
+
+Shows every rule the service knows, whether it is on or off, and lets you switch rules on and off and change how many failed attempts lead to a ban and for how long. Changes take effect right away: the service reloads its rules without losing current bans.
+
+To ban something new, click **New rule from an event**. In Event Viewer open the failed-login event, go to Details, XML View, copy it and paste it in. The wizard shows the IP addresses it found, you pick the attacker's, and it builds a rule and tests it against your event before you can save.
+
+### Advanced Tab (Rule Tester)
 
 When you find something you want automatically banned, you can use this tab to help you compose a rule for it. You copy your Windows Event-Log XML here and try to find a Regex for it. When you hit the "test button", and an IP can be extracted, you've found a new rule.
 

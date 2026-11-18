@@ -1,0 +1,10 @@
+### 2026-11 release of v3.0
+- new "Rules" tab in the console: every rule (also disabled ones) can be switched on/off and tuned in plain language ("ban an IP after 5 failed attempts within 2 minutes, for 60 minutes"), including "never ban permanently"
+- new "New rule from an event" wizard: paste an event's XML from Event Viewer, pick the attacker's IP, and EvlWatcher builds, tests and saves the rule for you
+- rule changes take effect immediately, without restarting the service; temporary bans, strike counts and manually lifted bans are kept across the reload
+- the service validates every rule change before writing config.xml, and config.xml is now written atomically (a failed write can no longer damage it)
+- upgrades keep your existing config.xml; this version's defaults are installed next to it as config.default.xml
+- the console now runs on .NET 10 with a modern (Fluent) look and dark mode; it needs the .NET 10 Desktop Runtime (x64) - the installer tells you if it's missing. The service itself still runs on .NET Framework 4.7.2
+- the "Rule Tester" tab is now called "Advanced"
+- fixes: a reload of config.xml no longer duplicates whitelist/ban list entries in memory; FirewallAPI now releases its COM objects
+- note: console and service must be the same version (the console uses new service operations)
