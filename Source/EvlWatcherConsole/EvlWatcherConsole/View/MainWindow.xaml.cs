@@ -14,7 +14,7 @@ namespace EvlWatcherConsole.View
         {
             if (AutoscrollCheckBox.IsChecked == true)
             {
-                ConsoleTextbox.Focus();
+                // no Focus() here: refreshes happen every few seconds and would steal focus from other controls
                 ConsoleTextbox.CaretIndex = ConsoleTextbox.Text.Length;
                 ConsoleTextbox.ScrollToEnd();
             }

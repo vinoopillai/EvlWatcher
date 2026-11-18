@@ -24,6 +24,7 @@ namespace EvlWatcherConsole.ViewModel
         private static volatile bool _run = true;
 
         private readonly EvlWatcherModel _model;
+        private readonly Rules.IRuleClient _ruleClient;
 
         private bool _isServiceResponding = false;
         private string _permaBanIPString = "";
@@ -54,6 +55,8 @@ namespace EvlWatcherConsole.ViewModel
         {
             TemporarilyBannedIPs.CollectionChanged += TemporarilyBannedIPs_CollectionChanged;
             _model = new EvlWatcherModel();
+            _ruleClient = _model;
+            Rules = new RulesViewModel(_ruleClient);
 
             StartUpdating();
         }
@@ -120,6 +123,11 @@ namespace EvlWatcherConsole.ViewModel
                         {
                             UpdateConsole();
                         }
+                        if (IsRulesTabSelected && !Rules.IsBusyEditing)
+                        {
+                            var fetched = Rules.Fetch(out string rulesError);
+                            Application.Current.Dispatcher.Invoke(new Action(() => { if (!Rules.IsBusyEditing) Rules.Apply(fetched, rulesError); }));
+                        }
                         if ((IsGlobalConfigSelected && !IsInGlobalEditMode) || (IsRuleEditorTabSelected && !IsInRuleEditMode))
                         {
                             UpdateGlobalConfig();
@@ -133,6 +141,7 @@ namespace EvlWatcherConsole.ViewModel
                 finally
                 {
                     IsServiceResponding = serviceResponding;
+                    Rules.ServiceResponding = serviceResponding;
                 }
 
                 try
@@ -424,6 +433,13 @@ namespace EvlWatcherConsole.ViewModel
         }
 
         public bool IsConsoleTabSelected
+        {
+            get; set;
+        }
+
+        public RulesViewModel Rules { get; }
+
+        public bool IsRulesTabSelected
         {
             get; set;
         }

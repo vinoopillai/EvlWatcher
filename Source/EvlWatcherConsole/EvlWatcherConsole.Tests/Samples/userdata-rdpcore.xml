@@ -1,0 +1,23 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-RemoteDesktopServices-RdpCoreTS" Guid="{1139C61B-B549-4251-8ED3-27250A1EDEC8}" />
+    <EventID>140</EventID>
+    <Version>0</Version>
+    <Level>3</Level>
+    <Task>4</Task>
+    <Opcode>14</Opcode>
+    <Keywords>0x4000000000000000</Keywords>
+    <TimeCreated SystemTime="2026-11-18T10:30:00.0000000Z" />
+    <EventRecordID>2201</EventRecordID>
+    <Channel>Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational</Channel>
+    <Computer>SRV01.example.test</Computer>
+    <Security UserID="S-1-5-18" />
+  </System>
+  <UserData>
+    <EventXML xmlns="Event_NS">
+      <Name>Unknown</Name>
+      <Address>198.51.100.4</Address>
+      <Port>3389</Port>
+    </EventXML>
+  </UserData>
+</Event>

@@ -1,0 +1,21 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="MSSQLSERVER" />
+    <EventID Qualifiers="0">18456</EventID>
+    <Version>0</Version>
+    <Level>0</Level>
+    <Task>4</Task>
+    <Opcode>0</Opcode>
+    <Keywords>0x90000000000000</Keywords>
+    <TimeCreated SystemTime="2026-11-18T09:01:10.5000000Z" />
+    <EventRecordID>5521</EventRecordID>
+    <Channel>Application</Channel>
+    <Computer>SQL01.example.test</Computer>
+    <Security />
+  </System>
+  <EventData>
+    <Data>sa</Data>
+    <Data>Reason: Password did not match that for the login provided.</Data>
+    <Data>198.51.100.23</Data>
+  </EventData>
+</Event>

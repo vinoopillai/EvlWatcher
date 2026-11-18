@@ -1,0 +1,17 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-A5BA-3E3B0328C30D}" />
+    <EventID>4625</EventID>
+    <Level>0</Level>
+    <TimeCreated SystemTime="2026-11-18T08:25:00.0000000Z" />
+    <EventRecordID>912500</EventRecordID>
+    <Channel>Security</Channel>
+    <Computer>SRV01.example.test</Computer>
+    <Security />
+  </System>
+  <EventData>
+    <Data Name="TargetUserName">svc</Data>
+    <Data Name="IpAddress">127.0.0.1</Data>
+    <Data Name="IpPort">0</Data>
+  </EventData>
+</Event>

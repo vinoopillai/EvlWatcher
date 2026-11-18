@@ -8,7 +8,7 @@ using System.ServiceModel;
 
 namespace EvlWatcherConsole.Model
 {
-    public class EvlWatcherModel
+    public class EvlWatcherModel : EvlWatcherConsole.Rules.IRuleClient
     {
         #region private members
 
@@ -51,12 +51,12 @@ namespace EvlWatcherConsole.Model
 
         public IQueryable<IPAddress> GetTemporarilyBannedIPs()
         {
-            return Service.GetTemporarilyBannedIPs().AsQueryable();
+            return Service.GetTemporarilyBannedIPs().Select(IPAddress.Parse).ToList().AsQueryable();
         }
 
         public IQueryable<IPAddress> GetPermanentlyBannedIPs()
         {
-            return Service.GetPermanentlyBannedIPs().AsQueryable();
+            return Service.GetPermanentlyBannedIPs().Select(IPAddress.Parse).ToList().AsQueryable();
         }
 
         public IQueryable<string> GetWhiteListPatterns()
@@ -102,7 +102,7 @@ namespace EvlWatcherConsole.Model
             {
                 ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
                 IEvlWatcherService service = f.CreateChannel();
-                service.SetPermanentBan(a);
+                service.SetPermanentBan(a.ToString());
             }
         }
 
@@ -112,11 +112,56 @@ namespace EvlWatcherConsole.Model
             {
                 ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
                 IEvlWatcherService service = f.CreateChannel();
-                service.ClearPermanentBan(a);
+                service.ClearPermanentBan(a.ToString());
             }
         }
         #endregion
 
+
+        #region IRuleClient
+
+        IList<GenericIPBlockingTaskDTO> EvlWatcherConsole.Rules.IRuleClient.GetRules()
+        {
+            GenericIPBlockingTaskDTO[] rules = null;
+            CallRuleService(() => rules = Service.GetRules());
+            return rules ?? new GenericIPBlockingTaskDTO[0];
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.SaveRule(GenericIPBlockingTaskDTO rule, bool isNew)
+        {
+            CallRuleService(() => Service.SaveRule(rule, isNew));
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.SetRuleActive(string name, bool active)
+        {
+            CallRuleService(() => Service.SetRuleActive(name, active));
+        }
+
+        private static void CallRuleService(Action call)
+        {
+            try
+            {
+                call();
+            }
+            catch (FaultException<ServiceFaultDTO> ex)
+            {
+                throw new EvlWatcherConsole.Rules.RuleClientException(ex.Detail.Message);
+            }
+            catch (EndpointNotFoundException)
+            {
+                throw new EvlWatcherConsole.Rules.RuleClientException("EvlWatcher service is not responding.");
+            }
+            catch (CommunicationException)
+            {
+                throw new EvlWatcherConsole.Rules.RuleClientException("EvlWatcher service is not responding.");
+            }
+            catch (TimeoutException)
+            {
+                throw new EvlWatcherConsole.Rules.RuleClientException("EvlWatcher service is not responding.");
+            }
+        }
+
+        #endregion
         #region private operations
 
         private IEvlWatcherService Service
@@ -140,12 +185,12 @@ namespace EvlWatcherConsole.Model
 
         internal void RemoveTemporaryBan(IPAddress selectedTemporaryIP)
         {
-            Service.RemoveTemporaryBan(selectedTemporaryIP);
+            Service.RemoveTemporaryBan(selectedTemporaryIP.ToString());
         }
 
         internal void AddPermanentIPBans(IPAddress[] iPAddresses)
         {
-            Service.SetPermanentBans(iPAddresses);
+            Service.SetPermanentBans(iPAddresses.Select(ip => ip.ToString()).ToArray());
         }
 
         #endregion

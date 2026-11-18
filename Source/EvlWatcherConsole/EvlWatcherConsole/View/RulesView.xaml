@@ -1,0 +1,175 @@
+<UserControl x:Class="EvlWatcherConsole.View.RulesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EvlWatcherConsole.View">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <Style x:Key="RuleDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsActive}" Value="False">
+                    <Setter Property="Fill" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RuleItemStyle" TargetType="StackPanel">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDimmed}" Value="True">
+                    <Setter Property="Opacity" Value="0.6" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Centered hint over an empty list. Bind Tag to the list's Count; shown only when it is 0. -->
+        <Style x:Key="CenteredHintStyle" TargetType="TextBlock" BasedOn="{StaticResource HintTextStyle}">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Margin" Value="16" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="0,16,0,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Rule list -->
+        <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,12,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Button Grid.Row="0" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Command="{Binding NewRuleCommand}" AutomationProperties.Name="New rule from an event">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE710;" Margin="0,0,8,0" />
+                    <TextBlock Text="New rule from an event" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+
+            <ListView Grid.Row="1"
+                      ItemsSource="{Binding Rules}" SelectedItem="{Binding Selected, Mode=TwoWay}"
+                      AutomationProperties.Name="Rules" HorizontalContentAlignment="Stretch">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel ToolTip="{Binding MissingLogsTooltip}">
+                            <Ellipse DockPanel.Dock="Left" Style="{StaticResource RuleDotStyle}" />
+                            <StackPanel Style="{StaticResource RuleItemStyle}">
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Style="{StaticResource HintTextStyle}" TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap" Text="{Binding Subtitle}" />
+                                <TextBlock Style="{StaticResource HintTextStyle}" Text="log not on this machine"
+                                           Visibility="{Binding HasMissingLogs, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <TextBlock Grid.Row="1" Style="{StaticResource CenteredHintStyle}" Tag="{Binding Rules.Count}"
+                       Text="{Binding EmptyListMessage}" />
+        </Grid>
+
+        <!-- Details -->
+        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardStyle}" Margin="0"
+                Visibility="{Binding ShowDetails, Converter={StaticResource BoolToVisibility}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel DataContext="{Binding Selected}">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right" Content="Rule is on" IsChecked="{Binding IsActive}"
+                                  AutomationProperties.Name="Rule is on" VerticalAlignment="Center" Margin="16,0,0,0" />
+                        <TextBlock Style="{StaticResource CardTitleStyle}" Text="{Binding Name}" Margin="0" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,4,0,16" Text="{Binding Description}" />
+
+                    <WrapPanel Margin="0,0,0,8">
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="Ban an IP after" />
+                        <TextBox Style="{StaticResource NumberBoxStyle}" Text="{Binding AttemptsText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Failed attempts" />
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="failed attempts within" />
+                        <TextBox Style="{StaticResource NumberBoxStyle}" Text="{Binding WindowMinutesText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Time window in minutes" />
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="minutes." />
+                    </WrapPanel>
+                    <WrapPanel Margin="0,0,0,8">
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="Ban it for" />
+                        <TextBox Style="{StaticResource NumberBoxStyle}" Text="{Binding BanMinutesText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Ban duration in minutes" />
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="minutes." />
+                    </WrapPanel>
+                    <WrapPanel Margin="0,0,0,8">
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="Ban permanently after" />
+                        <TextBox Style="{StaticResource PermanentNumberBoxStyle}" Text="{Binding PermanentAfterText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Temporary bans before a permanent ban" />
+                        <TextBlock Style="{StaticResource SentenceTextStyle}" Text="temporary bans." />
+                        <CheckBox Content="Never ban permanently" IsChecked="{Binding NeverPermanent}" Margin="16,0,0,0" />
+                    </WrapPanel>
+
+                    <Expander Header="Advanced (event log, booster words, regex)" Margin="0,12,0,0">
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="Event logs (one per line)" Margin="0,0,0,4" />
+                            <TextBox Style="{StaticResource MonoTextBoxStyle}" AcceptsReturn="True" MinHeight="48"
+                                     Text="{Binding EventLogsText, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Event logs" />
+                            <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,2,0,10"
+                                       Text="For example Security, or Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational." />
+                            <TextBlock Text="Booster words (one per line)" Margin="0,0,0,4" />
+                            <TextBox Style="{StaticResource MonoTextBoxStyle}" AcceptsReturn="True" MinHeight="48"
+                                     Text="{Binding BoostersText, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Booster words" />
+                            <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,2,0,10"
+                                       Text="An event is only checked with the regex when it contains all of these words. This keeps the scan fast." />
+                            <TextBlock Text="Regex" Margin="0,0,0,4" />
+                            <TextBox Style="{StaticResource MonoTextBoxStyle}" TextWrapping="Wrap"
+                                     Text="{Binding Regex, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Regex" />
+                            <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,2,0,10"
+                                       Text="Must contain exactly one capture group that matches the attacker IP address." />
+                            <CheckBox Content="Only check new events" IsChecked="{Binding OnlyNewEvents}" />
+                        </StackPanel>
+                    </Expander>
+
+                    <TextBlock Style="{StaticResource ErrorTextStyle}" Text="{Binding FieldError}" />
+                    <TextBlock Style="{StaticResource ErrorTextStyle}" Text="{Binding SaveError}" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0"
+                                Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="Discard" Command="{Binding DiscardCommand}" Margin="0,0,8,0" />
+                        <Button Content="Save" Command="{Binding SaveCommand}" Style="{StaticResource AccentButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource HintTextStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Select a rule to see its settings."
+                   Visibility="{Binding ShowSelectHint, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- New rule wizard, shown in place of the details while it is open -->
+        <local:NewRuleWizardView Grid.Row="0" Grid.Column="1" DataContext="{Binding Wizard}"
+                                 Visibility="{Binding DataContext.HasWizard, RelativeSource={RelativeSource AncestorType=UserControl, AncestorLevel=1}, FallbackValue=Collapsed, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- Status line -->
+        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource HintTextStyle}" Margin="0,8,0,0"
+                   Text="{Binding StatusMessage}" />
+    </Grid>
+</UserControl>
