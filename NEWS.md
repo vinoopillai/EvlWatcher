@@ -1,5 +1,8 @@
 ## NEWS 
 
+### 2026-11-19 preparing the release of v3.0.1
+- fixes the console making the service stop answering after 1-2 minutes (Rules tab stuck on "Loading rules..."): the console now closes every connection to the service
+
 ### 2026-11-18 preparing the release of v3.0
 - new "Rules" tab: switch rules on/off and tune them in plain language
 - new "New rule from an event" wizard: paste an event, EvlWatcher finds the IP and builds, tests and saves the rule

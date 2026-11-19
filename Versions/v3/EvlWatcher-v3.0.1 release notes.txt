@@ -1,0 +1,3 @@
+### 2026-11 release of v3.0.1
+- fixes the console making the service stop answering after 1-2 minutes (the Rules tab stayed on "Loading rules..." and the status bar showed "not responding"). The console left every connection to the service open; the service only accepts a limited number of them (100 per CPU core). It now closes each connection after use. The service itself was never affected and needs no change, but please upgrade both together as usual.
+- everything else as in v3.0 (see "EvlWatcher-v3.0.0 release notes.txt")
