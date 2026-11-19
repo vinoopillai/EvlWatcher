@@ -161,6 +161,10 @@
                             <Setter TargetName="BottomLine" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Frame" Property="Background" Value="{DynamicResource ControlFillColorDisabledBrush}" />
                         </Trigger>
+                        <!-- after IsReadOnly, so read-only boxes (no bottom line) still show keyboard focus -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Frame" Property="Background" Value="{DynamicResource ControlFillColorDisabledBrush}" />
                             <Setter TargetName="BottomLine" Property="Background" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
@@ -429,7 +433,7 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
+                            <!-- no FontWeight here: TabItem properties inherit into the tab's whole content -->
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />

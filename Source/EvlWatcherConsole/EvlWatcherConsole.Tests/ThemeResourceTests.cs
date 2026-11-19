@@ -104,6 +104,46 @@ namespace EvlWatcherConsole.Tests
         }
 
         [TestMethod]
+        public void SelectedTabDoesNotMakeItsContentBold()
+        {
+            FontWeight weight = FontWeights.Black;
+            WpfApp.Invoke(() =>
+            {
+                var body = new System.Windows.Controls.TextBlock { Text = "body" };
+                var tabs = new System.Windows.Controls.TabControl();
+                tabs.Items.Add(new System.Windows.Controls.TabItem { Header = "Tab", Content = body, IsSelected = true });
+                using (OffscreenWindow.Show(tabs))
+                {
+                    weight = body.FontWeight;
+                }
+            });
+
+            Assert.AreEqual(FontWeights.Normal, weight);
+        }
+
+        [TestMethod]
+        public void ReadOnlyTextBoxShowsKeyboardFocus()
+        {
+            bool focused = false, frameIsAccent = false;
+            WpfApp.Invoke(() =>
+            {
+                var box = new System.Windows.Controls.TextBox { IsReadOnly = true, Text = "log" };
+                using (OffscreenWindow.Show(box))
+                {
+                    focused = System.Windows.Input.Keyboard.Focus(box) == box;
+                    box.UpdateLayout();
+                    var frame = (System.Windows.Controls.Border)box.Template.FindName("Frame", box);
+                    var accent = (System.Windows.Media.SolidColorBrush)Application.Current.FindResource("AccentFillColorDefaultBrush");
+                    frameIsAccent = frame.BorderBrush is System.Windows.Media.SolidColorBrush b && b.Color == accent.Color;
+                }
+            });
+
+            if (!focused)
+                Assert.Inconclusive("The test host could not give keyboard focus to an offscreen window.");
+            Assert.IsTrue(frameIsAccent, "A focused read-only TextBox must show an accent border.");
+        }
+
+        [TestMethod]
         public void NoFluentOrIconFontReferences()
         {
             var offenders = AllXamlFiles
@@ -114,6 +154,28 @@ namespace EvlWatcherConsole.Tests
 
             Assert.AreEqual(0, offenders.Count, string.Join("\n", offenders));
         }
+    }
+
+    /// <summary>Shows content in a real window far off screen, so templates and triggers apply. Dispose closes it.</summary>
+    internal sealed class OffscreenWindow : IDisposable
+    {
+        private readonly Window _window;
+
+        private OffscreenWindow(UIElement content)
+        {
+            _window = new Window
+            {
+                Content = content, Width = 400, Height = 300, Left = -5000, Top = -5000,
+                WindowStartupLocation = WindowStartupLocation.Manual, ShowInTaskbar = false
+            };
+            _window.Show();
+            _window.Activate();
+            _window.UpdateLayout();
+        }
+
+        public static OffscreenWindow Show(UIElement content) => new OffscreenWindow(content);
+
+        public void Dispose() => _window.Close();
     }
 
     /// <summary>One EvlWatcherConsole.App per test run, living on its own STA dispatcher thread.</summary>
