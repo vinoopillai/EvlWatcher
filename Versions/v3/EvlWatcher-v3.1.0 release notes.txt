@@ -8,3 +8,5 @@
 - the console keeps the v3.0 layout and look in light mode, with its own theme and vector icons that look the same on every Windows version. Dark mode was dropped (.NET Framework doesn't follow the Windows setting).
 - upgrades keep your config.xml (bans, whitelist and rule changes), as before. This version's default rules are written next to it as config.default.xml.
 - everything else as in v3.0.2
+
+EvlWatcher-v3.1.0-setup.exe (unsigned) SHA-256: A227ACC83EB93F118543823B0635797BF0B96EA68050995FCC1D676FFD8895FD
