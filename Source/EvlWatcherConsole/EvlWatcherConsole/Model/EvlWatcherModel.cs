@@ -13,6 +13,32 @@ namespace EvlWatcherConsole.Model
         #region private members
 
         private readonly object _syncObject = new object();
+        private readonly System.ServiceModel.Channels.Binding _binding;
+        private readonly EndpointAddress _address;
+
+        /// <summary>
+        /// one factory for the lifetime of the model (creating one per call is expensive); guarded by <see cref="_syncObject"/>
+        /// </summary>
+        private ChannelFactory<IEvlWatcherService> _factory;
+
+        #endregion
+
+        #region public constructors
+
+        public EvlWatcherModel()
+            : this(new NetNamedPipeBinding() { MaxReceivedMessageSize = Int32.MaxValue /* big console logs */ },
+                   new EndpointAddress("net.pipe://localhost/EvlWatcher"))
+        {
+        }
+
+        /// <summary>
+        /// for tests/diagnostics: talk to the service over another binding or address
+        /// </summary>
+        public EvlWatcherModel(System.ServiceModel.Channels.Binding binding, EndpointAddress address)
+        {
+            _binding = binding;
+            _address = address;
+        }
 
         #endregion
 
@@ -35,14 +61,14 @@ namespace EvlWatcherConsole.Model
 
         public GlobalConfigDTO GetGlobalConfig()
         {
-            return Service.GetGlobalConfig();
+            return Call(s => s.GetGlobalConfig());
         }
 
         public bool IsServiceResponding
         {
             get
             {
-                return Service.GetIsRunning();
+                return Call(s => s.GetIsRunning());
             }
         }
         #endregion
@@ -51,17 +77,17 @@ namespace EvlWatcherConsole.Model
 
         public IQueryable<IPAddress> GetTemporarilyBannedIPs()
         {
-            return Service.GetTemporarilyBannedIPs().Select(IPAddress.Parse).ToList().AsQueryable();
+            return Call(s => s.GetTemporarilyBannedIPs()).Select(IPAddress.Parse).ToList().AsQueryable();
         }
 
         public IQueryable<IPAddress> GetPermanentlyBannedIPs()
         {
-            return Service.GetPermanentlyBannedIPs().Select(IPAddress.Parse).ToList().AsQueryable();
+            return Call(s => s.GetPermanentlyBannedIPs()).Select(IPAddress.Parse).ToList().AsQueryable();
         }
 
         public IQueryable<string> GetWhiteListPatterns()
         {
-            return Service.GetWhiteListEntries().AsQueryable();
+            return Call(s => s.GetWhiteListEntries()).AsQueryable();
         }
 
         public IQueryable<LogEntryDTO> GetConsoleHistory(SeverityLevelDTO severityLevel)
@@ -72,48 +98,28 @@ namespace EvlWatcherConsole.Model
             }
             else
             {
-                return Service.GetConsoleHistory().Where(entry => entry.Severity >= severityLevel).AsQueryable();
+                return Call(s => s.GetConsoleHistory()).Where(entry => entry.Severity >= severityLevel).AsQueryable();
             }
         }
 
         public void AddWhiteListEntry(string s)
         {
-            lock (_syncObject)
-            {
-                ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
-                IEvlWatcherService service = f.CreateChannel();
-                service.AddWhiteListEntry(s);
-            }
+            Call(service => service.AddWhiteListEntry(s));
         }
 
         public void RemoveWhiteListEntry(string s)
         {
-            lock (_syncObject)
-            {
-                ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
-                IEvlWatcherService service = f.CreateChannel();
-                service.RemoveWhiteListEntry(s);
-            }
+            Call(service => service.RemoveWhiteListEntry(s));
         }
 
         public void AddPermanentIPBan(IPAddress a)
         {
-            lock (_syncObject)
-            {
-                ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
-                IEvlWatcherService service = f.CreateChannel();
-                service.SetPermanentBan(a.ToString());
-            }
+            Call(service => service.SetPermanentBan(a.ToString()));
         }
 
         public void RemovePermanentIPBan(IPAddress a)
         {
-            lock (_syncObject)
-            {
-                ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(new NetNamedPipeBinding(), new EndpointAddress("net.pipe://localhost/EvlWatcher"));
-                IEvlWatcherService service = f.CreateChannel();
-                service.ClearPermanentBan(a.ToString());
-            }
+            Call(service => service.ClearPermanentBan(a.ToString()));
         }
         #endregion
 
@@ -123,18 +129,18 @@ namespace EvlWatcherConsole.Model
         IList<GenericIPBlockingTaskDTO> EvlWatcherConsole.Rules.IRuleClient.GetRules()
         {
             GenericIPBlockingTaskDTO[] rules = null;
-            CallRuleService(() => rules = Service.GetRules());
+            CallRuleService(() => rules = Call(s => s.GetRules()));
             return rules ?? new GenericIPBlockingTaskDTO[0];
         }
 
         void EvlWatcherConsole.Rules.IRuleClient.SaveRule(GenericIPBlockingTaskDTO rule, bool isNew)
         {
-            CallRuleService(() => Service.SaveRule(rule, isNew));
+            CallRuleService(() => Call(s => s.SaveRule(rule, isNew)));
         }
 
         void EvlWatcherConsole.Rules.IRuleClient.SetRuleActive(string name, bool active)
         {
-            CallRuleService(() => Service.SetRuleActive(name, active));
+            CallRuleService(() => Call(s => s.SetRuleActive(name, active)));
         }
 
         private static void CallRuleService(Action call)
@@ -164,33 +170,64 @@ namespace EvlWatcherConsole.Model
         #endregion
         #region private operations
 
-        private IEvlWatcherService Service
+        /// <summary>
+        /// Runs one service operation on a fresh channel and always ends that channel: Close() on success, Abort() on any failure.
+        /// Every open channel is a session on the service, which accepts only 100 sessions per CPU core (WCF default) and keeps an
+        /// abandoned one for its 10 minute inactivity timeout. Leaking them made the service stop answering after 1-2 minutes.
+        /// </summary>
+        private T Call<T>(Func<IEvlWatcherService, T> operation)
+        {
+            IEvlWatcherService channel = Factory.CreateChannel();
+            var clientChannel = (IClientChannel)channel;
+            bool closed = false;
+            try
+            {
+                T result = operation(channel);
+                clientChannel.Close();
+                closed = true;
+                return result;
+            }
+            finally
+            {
+                if (!closed)
+                    clientChannel.Abort();
+            }
+        }
+
+        private void Call(Action<IEvlWatcherService> operation)
+        {
+            Call(s => { operation(s); return true; });
+        }
+
+        private ChannelFactory<IEvlWatcherService> Factory
         {
             get
             {
-                var binding = new NetNamedPipeBinding()
+                lock (_syncObject)
                 {
-                    MaxReceivedMessageSize = Int32.MaxValue //Setting to receive big console logs
-                };
-
-                ChannelFactory<IEvlWatcherService> f = new ChannelFactory<IEvlWatcherService>(binding, new EndpointAddress("net.pipe://localhost/EvlWatcher"));
-                return f.CreateChannel();
+                    if (_factory == null || _factory.State == CommunicationState.Faulted || _factory.State == CommunicationState.Closed)
+                    {
+                        _factory?.Abort();
+                        _factory = new ChannelFactory<IEvlWatcherService>(_binding, _address);
+                    }
+                    return _factory;
+                }
             }
         }
 
         internal void SaveGlobalConfig(SeverityLevelDTO logLevel, int consoleBackLog, int checkInterval)
         {
-            Service.SaveGlobalConfig(logLevel, consoleBackLog, checkInterval);
+            Call(s => s.SaveGlobalConfig(logLevel, consoleBackLog, checkInterval));
         }
 
         internal void RemoveTemporaryBan(IPAddress selectedTemporaryIP)
         {
-            Service.RemoveTemporaryBan(selectedTemporaryIP.ToString());
+            Call(s => s.RemoveTemporaryBan(selectedTemporaryIP.ToString()));
         }
 
         internal void AddPermanentIPBans(IPAddress[] iPAddresses)
         {
-            Service.SetPermanentBans(iPAddresses.Select(ip => ip.ToString()).ToArray());
+            Call(s => s.SetPermanentBans(iPAddresses.Select(ip => ip.ToString()).ToArray()));
         }
 
         #endregion
