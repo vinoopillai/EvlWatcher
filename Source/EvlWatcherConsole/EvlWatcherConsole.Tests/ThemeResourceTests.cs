@@ -64,7 +64,46 @@ namespace EvlWatcherConsole.Tests
         }
 
         [TestMethod]
-        [Ignore("until Task 3")]
+        public void NoIconGlyphsInViews()
+        {
+            var glyph = new Regex(@"&#x[Ee][0-9A-Fa-f]{3};");
+            var offenders = AllXamlFiles
+                .Where(f => glyph.IsMatch(File.ReadAllText(f)) || File.ReadAllText(f).Contains("IconTextStyle"))
+                .Select(Path.GetFileName)
+                .ToList();
+
+            Assert.AreEqual(0, offenders.Count, "Icon-font glyphs or IconTextStyle still used in: " + string.Join(", ", offenders));
+        }
+
+        [TestMethod]
+        public void IconsAreGeometries()
+        {
+            string[] keys =
+            {
+                "ShieldIcon", "PulseIcon", "ListIcon", "SettingsIcon", "CodeIcon", "EditIcon",
+                "PlayIcon", "ResetIcon", "AddIcon", "CancelIcon", "LockIcon", "UnlockIcon"
+            };
+            var problems = new List<string>();
+            WpfApp.Invoke(() =>
+            {
+                foreach (string key in keys)
+                {
+                    var geometry = Application.Current.TryFindResource(key) as System.Windows.Media.Geometry;
+                    if (geometry == null)
+                    {
+                        problems.Add(key + ": missing or not a Geometry");
+                        continue;
+                    }
+                    Rect b = geometry.Bounds;
+                    if (b.IsEmpty || b.Left < 0 || b.Top < 0 || b.Right > 16 || b.Bottom > 16)
+                        problems.Add($"{key}: bounds {b} outside 0..16");
+                }
+            });
+
+            Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+        }
+
+        [TestMethod]
         public void NoFluentOrIconFontReferences()
         {
             var offenders = AllXamlFiles

@@ -62,7 +62,7 @@
             <Button Grid.Row="0" HorizontalAlignment="Stretch" Margin="0,0,0,8"
                     Command="{Binding NewRuleCommand}" AutomationProperties.Name="New rule from an event">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE710;" Margin="0,0,8,0" />
+                    <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource AddIcon}" Margin="0,0,8,0" />
                     <TextBlock Text="New rule from an event" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>

@@ -7,23 +7,27 @@
             <ResourceDictionary.MergedDictionaries>
                 <!-- EvlWatcher's own light theme (Themes/Light.xaml): same look on every Windows version. -->
                 <ResourceDictionary Source="Themes/Light.xaml" />
+                <!-- Vector icons (Themes/Icons.xaml) and IconPathStyle; no icon fonts. -->
+                <ResourceDictionary Source="Themes/Icons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Only use glyphs that exist in BOTH Segoe Fluent Icons and Segoe MDL2 Assets. -->
-            <Style x:Key="IconTextStyle" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
-                <Setter Property="FontSize" Value="16" />
-                <Setter Property="VerticalAlignment" Value="Center" />
-            </Style>
-
-            <!-- Square icon-only button; the meaning is in its ToolTip and AutomationProperties.Name -->
+            <!-- Square icon-only button: Tag = the icon geometry; the meaning is in its ToolTip and AutomationProperties.Name -->
             <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                 <Setter Property="Width" Value="36" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="Margin" Value="4,0,0,0" />
-                <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
-                <Setter Property="FontSize" Value="16" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
+                                <Path Style="{StaticResource IconPathStyle}" HorizontalAlignment="Center"
+                                      Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <Style x:Key="CardStyle" TargetType="Border">

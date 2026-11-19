@@ -58,7 +58,7 @@
             <TabItem IsSelected="{Binding IsIPTabSelected, Mode=OneWayToSource}">
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xEA18;" Margin="0,0,8,0" />
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource ShieldIcon}" Margin="0,0,8,0" />
                         <TextBlock Text="Bans &amp; Whitelist" VerticalAlignment="Center" />
                     </StackPanel>
                 </TabItem.Header>
@@ -100,13 +100,13 @@
                                 <Button DockPanel.Dock="Left" Margin="0" Content="Ban all permanently"
                                         Command="{Binding MoveAllTemporaryToPermaCommand}" IsEnabled="{Binding CanAddTemporaryToPerma}"
                                         ToolTip="Move every temporarily banned IP to the permanent ban list" />
-                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Content="&#xE785;"
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource UnlockIcon}"
                                         Command="{Binding MoveTemporaryToWhiteListCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Whitelist the selected IP" AutomationProperties.Name="Whitelist the selected IP" />
-                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Content="&#xE72E;"
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource LockIcon}"
                                         Command="{Binding MoveTemporaryToPermaCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Ban the selected IP permanently" AutomationProperties.Name="Ban the selected IP permanently" />
-                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Content="&#xE711;"
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource CancelIcon}"
                                         Command="{Binding RemoveTemporaryBanCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Lift the temporary ban for the selected IP" AutomationProperties.Name="Lift temporary ban" />
                             </DockPanel>
@@ -144,10 +144,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBox Text="{Binding PermaBanIPString, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
                                          ToolTip="IP address to ban permanently, e.g. 203.0.113.7" AutomationProperties.Name="IP address to ban" />
-                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Content="&#xE710;"
+                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource AddIcon}"
                                         Command="{Binding AddPermaBanCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Ban the entered IP permanently" AutomationProperties.Name="Add permanent ban" />
-                                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Content="&#xE711;"
+                                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource CancelIcon}"
                                         Command="{Binding RemovePermaBanCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Remove the selected IP from the permanent ban list" AutomationProperties.Name="Remove permanent ban" />
                             </Grid>
@@ -185,10 +185,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBox Text="{Binding WhiteListFilter, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
                                          ToolTip="IP or wildcard pattern to whitelist, e.g. 10.0.0.*" AutomationProperties.Name="Pattern to whitelist" />
-                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Content="&#xE710;"
+                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource AddIcon}"
                                         Command="{Binding AddWhiteListFilterCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Add the entered pattern to the whitelist" AutomationProperties.Name="Add to whitelist" />
-                                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Content="&#xE711;"
+                                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource CancelIcon}"
                                         Command="{Binding RemoveWhiteListFilterCommand}" IsEnabled="{Binding IsServiceResponding}"
                                         ToolTip="Remove the selected pattern from the whitelist" AutomationProperties.Name="Remove from whitelist" />
                             </Grid>
@@ -203,7 +203,7 @@
             <TabItem IsSelected="{Binding IsConsoleTabSelected, Mode=OneWayToSource}">
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE9D9;" Margin="0,0,8,0" />
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource PulseIcon}" Margin="0,0,8,0" />
                         <TextBlock Text="Live" VerticalAlignment="Center" />
                     </StackPanel>
                 </TabItem.Header>
@@ -236,7 +236,7 @@
             <TabItem IsSelected="{Binding IsRulesTabSelected, Mode=OneWayToSource}">
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE8FD;" Margin="0,0,8,0" />
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource ListIcon}" Margin="0,0,8,0" />
                         <TextBlock Text="Rules" VerticalAlignment="Center" />
                     </StackPanel>
                 </TabItem.Header>
@@ -249,7 +249,7 @@
             <TabItem IsSelected="{Binding IsGlobalConfigSelected, Mode=OneWayToSource}">
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE713;" Margin="0,0,8,0" />
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource SettingsIcon}" Margin="0,0,8,0" />
                         <TextBlock Text="Settings" VerticalAlignment="Center" />
                     </StackPanel>
                 </TabItem.Header>
@@ -308,7 +308,7 @@
                                 </StackPanel.Style>
                                 <Button Command="{Binding ToggleGlobalConfigEditModeCommand}" ToolTip="Start editing the values above" MinWidth="96">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Style="{StaticResource IconTextStyle}" FontSize="14" Text="&#xE70F;" Margin="0,0,8,0" />
+                                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource EditIcon}" LayoutTransform="0.875,0,0,0.875,0,0" Margin="0,0,8,0" />
                                         <TextBlock Text="Edit" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
@@ -324,7 +324,7 @@
             <TabItem IsSelected="{Binding IsRuleEditorTabSelected, Mode=OneWayToSource}">
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE943;" Margin="0,0,8,0" />
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource CodeIcon}" Margin="0,0,8,0" />
                         <TextBlock Text="Advanced" VerticalAlignment="Center" />
                     </StackPanel>
                 </TabItem.Header>
@@ -389,14 +389,14 @@
                                     <Button Grid.Column="1" Style="{StaticResource AccentButtonStyle}" Margin="8,0,0,0" MinWidth="96"
                                             Command="{Binding TestRegexCommand}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Style="{StaticResource IconTextStyle}" FontSize="14" Text="&#xE768;" Margin="0,0,8,0" />
+                                            <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource PlayIcon}" LayoutTransform="0.875,0,0,0.875,0,0" Margin="0,0,8,0" />
                                             <TextBlock Text="Test" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Button>
                                     <Button Grid.Column="2" Margin="8,0,0,0" MinWidth="96" Command="{Binding ResetRegexCommand}"
                                             ToolTip="Restore the selected rule's regex">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Style="{StaticResource IconTextStyle}" FontSize="14" Text="&#xE72C;" Margin="0,0,8,0" />
+                                            <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource ResetIcon}" LayoutTransform="0.875,0,0,0.875,0,0" Margin="0,0,8,0" />
                                             <TextBlock Text="Reset" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Button>
