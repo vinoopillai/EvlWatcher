@@ -27,7 +27,7 @@ Source/
 │   │   └── NSIS/make.nsi                     # installer script
 │   ├── EvlWatcher.WCF/                       # shared WCF contract (IEvlWatcherService) + DTOs, net472 library
 │   └── EvlWatcher.Tests.Integration/         # MSTest, net10.0, x86 — real firewall integration tests
-└── EvlWatcherConsole/EvlWatcherConsole.sln   # WPF admin GUI (WinExe, SDK-style, net10.0-windows, MVVM)
+└── EvlWatcherConsole/EvlWatcherConsole.sln   # WPF admin GUI (WinExe, SDK-style, net472, MVVM)
     └── EvlWatcherConsole/
         ├── Model/EvlWatcherModel.cs          # WCF client (ChannelFactory per call)
         ├── ViewModel/MainWindowViewModel.cs
@@ -42,7 +42,7 @@ Folder names on disk are lowercase (`tasks`, `systemapi`, `converter`, `comparer
 - **Startup** (`EvlWatcher.Main`): it builds `DefaultLogger`, `XmlServiceConfiguration` and `DefaultGenericTaskFactory` by hand (no DI container). If `Environment.UserInteractive` is true, it runs `OnStart` directly and sleeps instead of starting as a service. This is the debug path.
 - **IPC**: the service hosts `IEvlWatcherService` at `net.pipe://localhost/EvlWatcher` (`NetNamedPipeBinding`, singleton instance = the service itself). The console connects to that same address. If you change the contract, rebuild **both** sides.
 - **Always end client channels.** Every console call goes through `EvlWatcherModel.Call(...)`, which uses one shared `ChannelFactory` and `Close()`s each channel (or `Abort()`s it on failure). Never call `CreateChannel()` and walk away. Each open channel is a session on the service, WCF allows only **100 sessions per CPU core**, and an abandoned session lives for the 10-minute inactivity timeout. A leak made the service stop answering 1–2 minutes after the Rules tab opened (the console then showed it as not responding and the Rules tab stuck on "Loading").
-- **Mixed runtimes across the pipe**: the service runs on .NET Framework 4.7.2, and the console runs on .NET 10 using the `System.ServiceModel.NetNamedPipe` client package. The console compiles `IEvlWatcherService.cs` and `DTOs/*.cs` from `EvlWatcher.WCF` **from source**, so there is one contract definition shared by both sides. Only put types into the contract that serialize the same way on both runtimes: primitives, strings, arrays and `[DataContract]` DTOs. **Don't** use `System.Net.IPAddress` or other framework types, because they can't be serialized on .NET 10. That's why IPs cross the pipe as strings.
+- **One runtime on both sides of the pipe**: the service and the console both run on .NET Framework 4.7.2 (the console moved back from .NET 10 in v3.1 so it runs on older Windows). The console uses the framework's own `System.ServiceModel` and still compiles `IEvlWatcherService.cs` and `DTOs/*.cs` from `EvlWatcher.WCF` **from source**, so there is one contract definition and the two solutions stay independent. Keep the contract to primitives, strings, arrays and `[DataContract]` DTOs, so a future move of either side to modern .NET stays possible; that's why IPs cross the pipe as strings rather than `System.Net.IPAddress`.
 - **Scan loop** (`EvlWatcher.Run`): it reloads `config.xml` and builds one task per `<Task>`. It groups tasks by `EventPath` so each log is read only once per cycle. Then every `CheckInterval` seconds it:
   1. Queries each log (`EventLogQuery`, reverse direction).
   2. Gives each task its events (all events in the time window, or only new ones when `OnlyNew` is set).
@@ -60,13 +60,14 @@ The service and `EvlWatcher.WCF` are old-style (non-SDK) .NET Framework 4.7.2 pr
 ```powershell
 # from a VS Developer PowerShell
 msbuild Source\EvlWatcher\EvlWatcher.sln /p:Configuration=Release
-dotnet build Source\EvlWatcherConsole\EvlWatcherConsole.sln -c Release   # console is SDK-style
+dotnet build Source\EvlWatcherConsole\EvlWatcherConsole.sln -c Release   # console is SDK-style, targets net472
+dotnet test  Source\EvlWatcherConsole\EvlWatcherConsole.Tests -c Release   # console unit tests, no admin needed
 ```
 
 Things to know:
 - The console no longer depends on `EvlWatcher.WCF.dll`, so the two solutions can be built in any order.
 - `EvlWatcher.csproj` uses a COM reference to `NetFwTypeLib` (embedded interop types). It needs the Windows firewall type library, so it builds only on Windows.
-- Platforms: the service and console default to `x86` (Release service is `AnyCPU`). The integration test project is `x86` and references the service exe directly.
+- Platforms: the service defaults to `x86` (Release service is `AnyCPU`); the console is `AnyCPU`, so it runs on 32- and 64-bit Windows. The integration test project is `x86` and references the service exe directly.
 - Every new `.cs` file must be added to its `.csproj` `<Compile Include=...>` list by hand, because these legacy projects don't use globbing.
 
 ## Testing
@@ -105,10 +106,11 @@ Most changes people contribute are rule changes. Each `<Task Name="..." Active="
 
 ## Console UI
 
-- The console uses WPF's built-in **Fluent theme**, merged in `App.xaml` from `PresentationFramework.Fluent;component/Themes/Fluent.xaml`. It follows the Windows light/dark setting. Shared styles (`CardStyle`, `IconButtonStyle`, `HintTextStyle` and so on) also live in `App.xaml`.
-- Use theme brushes through `DynamicResource` (for example `TextFillColorSecondaryBrush` or `CardBackgroundFillColorDefaultBrush`). Don't hard-code colours, because they break in dark mode.
-- If you give a control an inline `Style`, set `BasedOn="{StaticResource {x:Type Button}}"` (or whatever the control type is). Without it the control falls back to the classic look.
-- Icons are glyphs in `{DynamicResource SymbolThemeFontFamily}` ("Segoe Fluent Icons, Segoe MDL2 Assets"). Windows 10 and Server 2019 only have **Segoe MDL2 Assets**, so only use glyphs that exist in both fonts, such as `E710` Add, `E711` Cancel, `E72E` Lock, `E785` Unlock, `E713` Settings and `E768` Play.
+- The console uses **its own light theme**, `Themes/Light.xaml`, merged in `App.xaml`. It looks the same on every Windows version; there is no dark mode. It defines the brushes (under Fluent-style names such as `TextFillColorSecondaryBrush`, `CardBackgroundFillColorDefaultBrush`, `AccentFillColorDefaultBrush`), `BodyStrongTextBlockStyle`, `CaptionTextBlockStyle`, `AccentButtonStyle` and implicit styles with templates for every control in use. App-level styles (`CardStyle`, `IconButtonStyle`, `HintTextStyle` and so on) live in `App.xaml`. Don't bring back `PresentationFramework.Fluent`: it needs .NET 9+.
+- Use theme brushes through `DynamicResource`. Don't hard-code colours in views.
+- If you add a control type the theme doesn't style yet, add an implicit style for it in `Themes/Light.xaml`; otherwise it shows the classic Windows look. Inline styles set `BasedOn="{StaticResource {x:Type Button}}"` (or whatever the control type is).
+- Icons are vector outlines in `Themes/Icons.xaml` (`AddIcon`, `CancelIcon`, `LockIcon`, `UnlockIcon`, `SettingsIcon`, `PlayIcon`, ... on a 16×16 grid, stroked). Use them as `<Path Style="{StaticResource IconPathStyle}" Data="{StaticResource AddIcon}"/>` or `<Button Style="{StaticResource IconButtonStyle}" Tag="{StaticResource AddIcon}"/>`. The stroke follows the parent control's `Foreground`. **No icon fonts**: Windows 7 / 8.1 have neither Segoe MDL2 Assets nor Segoe Fluent Icons.
+- `ThemeResourceTests` fail when a view references a resource the theme doesn't define, or when icon-font glyphs, `SymbolThemeFontFamily`, Fluent or Cascadia come back. Keep them green.
 - Icon-only buttons need both a `ToolTip` and an `AutomationProperties.Name`.
 - Tabs: Bans & Whitelist, Live, **Rules**, Settings and **Advanced** (the old Rule Tester, unchanged). The Rules tab (`RulesView`, `RulesViewModel`, `RuleEditorViewModel`) lists rules from `GetRules()` and edits them in plain language: minutes in the UI, seconds in the DTO. It talks to the service through `IRuleClient`, so view models stay testable. The periodic refresh is skipped while `RulesViewModel.IsBusyEditing` (unsaved edits or the wizard is open).
 - The **new-rule wizard** (`NewRuleWizardViewModel`, `NewRuleWizardView`) opens in place of the details pane: paste event XML, pick the IP, review and save. Step 3 reuses `RuleEditorViewModel` with `isNew: true`; the UI only exposes the wizard's `SaveCommand`, which stays disabled until the self-test passes.
@@ -124,19 +126,19 @@ Most changes people contribute are rule changes. Each `<Task Name="..." Active="
 
 ## Releasing
 
-- Bump the version in `Properties/AssemblyInfo.cs` (both apps), in `OutFile` in `NSIS/make.nsi`, and in the README download link.
-- `make.nsi` expects `EvlWatcher.exe`, `EvlWatcher.WCF.dll`, `config.xml`, `license.txt` and `EvlWatcher.ico` from the service's `bin\Release`, plus `EvlWatcherConsole.exe`, all in its working directory. The header comment in the script has the details. Compile it with NSIS 3.x (a portable zip works, no admin needed). Put `nsSCM.dll` from https://nsis.sourceforge.io/NsSCM_plug-in in `<NSIS>\Plugins\x86-ansi`, because the script sets `Unicode false` (nsSCM is ANSI-only). Then run `makensis make.nsi`. Installers and release notes go to `../Versions/v<major>/` (v3 for 3.x). Earlier releases were Authenticode-signed; sign the setup.exe before publishing.
+- Bump the version in `Properties/AssemblyInfo.cs` (service, `EvlWatcher.WCF` and console), in the console window title (`MainWindow.xaml`), in `OutFile` in `NSIS/make.nsi`, and in the README download link.
+- `make.nsi` expects `EvlWatcher.exe`, `EvlWatcher.WCF.dll`, `config.xml` and `license.txt` from the service's `bin\Release`, `EvlWatcher.ico` (from `EvlWatcher\resources\`), plus `EvlWatcherConsole.exe` and `EvlWatcherConsole.exe.config` from the console's `bin\Release\net472\`, all in its working directory. The header comment in the script has the details. Compile it with NSIS 3.x (a portable zip works, no admin needed). Put `nsSCM.dll` from https://nsis.sourceforge.io/NsSCM_plug-in in `<NSIS>\Plugins\x86-ansi`, because the script sets `Unicode false` (nsSCM is ANSI-only). Then run `makensis make.nsi`. Installers and release notes go to `../Versions/v<major>/` (v3 for 3.x). Earlier releases were Authenticode-signed; sign the setup.exe before publishing.
 - Signing (no `signtool` needed). Use a code-signing cert from the Windows store, or `Get-PfxCertificate <file.pfx>`, then:
   ```powershell
   $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
-  Set-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.2-setup.exe -Certificate $cert `
+  Set-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.1.0-setup.exe -Certificate $cert `
       -HashAlgorithm SHA256 -TimestampServer http://timestamp.digicert.com
-  Get-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.2-setup.exe   # Status should be Valid
+  Get-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.1.0-setup.exe   # Status should be Valid
   ```
   The timestamp keeps the signature valid after the certificate expires. Sign the final setup.exe only: signing changes its hash, so publish the hash after signing.
-- Build the console for the installer with `dotnet publish -c Release -p:PublishProfile=Installer` (`Properties/PublishProfiles/Installer.pubxml`). This produces one framework-dependent `win-x64` exe in `bin\publish\`. Target machines need the **.NET 10 Desktop Runtime (x64)**. If it's missing, the installer warns and offers the download page but still installs: the service doesn't need it, and silent `/S` rollouts must not stop there.
+- The console for the installer is the normal `dotnet build -c Release` output (`bin\Release\net472\`: exe plus `.exe.config`, AnyCPU). Service and console need **.NET Framework 4.7.2**; the installer checks `NDP\v4\Full\Release >= 461808`, and if it's missing it warns (mentioning KB4019990 for Server 2012 / Windows 7) and offers the download page but still installs, because silent `/S` rollouts must not stop there.
 - On upgrade the installer **keeps the existing `config.xml`** and writes this version's defaults next to it as `config.default.xml`. New rules shipped in `config.xml` therefore only reach fresh installs automatically; mention them in the release notes.
-- Deployment targets: 64-bit Windows 10 (1607+), Windows 11 and Windows Server 2016+ **with Desktop Experience**. WPF doesn't run on Server Core, so manage those machines from elsewhere or by editing `config.xml`.
+- Deployment targets: Windows 8.1 / Server 2012 and later (32- or 64-bit) **with Desktop Experience**. WPF doesn't run on Server Core, so manage those machines from elsewhere or by editing `config.xml`. Windows 7 SP1 / Server 2008 R2 SP1 should work (nothing in the build excludes them) but are only announced once tested on a VM; their release notes must then mention KB4474419 (SHA-2 code signing), because the installer is signed with SHA-256 only.
 - Upstream workflow (`../CONTRIBUTING.md`): open PRs against the next-version branch (for example `v2.1.x`), never `master`.
 
 ## Known quirks (don't "fix" by accident without intent)

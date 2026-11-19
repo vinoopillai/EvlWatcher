@@ -1,0 +1,10 @@
+### 2026-11 release of v3.1.0
+- the console (EvlWatcherConsole) no longer needs the .NET 10 Desktop Runtime. It now runs on .NET Framework 4.7.2, the same as the EvlWatcher service, so one prerequisite covers both.
+  .NET Framework 4.7.2 or later is built into Windows 10 1803+, Windows 11 and Windows Server 2019+. On older systems, install it from https://dotnet.microsoft.com/download/dotnet-framework/net472
+  On Windows Server 2012, install update KB4019990 before .NET Framework 4.7.2.
+  The installer now checks for it (the service needed it all along) and offers the download page if it is missing. It never stops a silent (/S) install.
+- supported systems: Windows 8.1, 10 and 11, Windows Server 2012, 2012 R2, 2016, 2019, 2022 and 2025, 32- or 64-bit, with Desktop Experience (the console needs a desktop; the service also runs on Server Core).
+- Windows 7 SP1 and Windows Server 2008 R2 SP1 are expected to work but have not been tested yet. Support for them will be announced in a later 3.1.x.
+- the console keeps the v3.0 layout and look in light mode, with its own theme and vector icons that look the same on every Windows version. Dark mode was dropped (.NET Framework doesn't follow the Windows setting).
+- upgrades keep your config.xml (bans, whitelist and rule changes), as before. This version's default rules are written next to it as config.default.xml.
+- everything else as in v3.0.2

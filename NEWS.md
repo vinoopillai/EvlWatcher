@@ -1,5 +1,10 @@
 ## NEWS 
 
+### 2026-11-19 preparing the release of v3.1.0
+- the console no longer needs the .NET 10 Desktop Runtime: it runs on .NET Framework 4.7.2, like the service, which is built into Windows 10 1803+, 11 and Server 2019+
+- supported on Windows 8.1 / Server 2012 and later (32- or 64-bit); Windows 7 / Server 2008 R2 will follow once tested
+- same look as v3.0 in light mode, with its own theme and vector icons; dark mode was dropped
+
 ### 2026-11-19 preparing the release of v3.0.2
 - SQL Server rule catches every failed login (event 18456), not only wrong passwords; existing installs: update the rule (see release notes)
 - the new-rule wizard accepts XML copied from Event Viewer with "- " markers
