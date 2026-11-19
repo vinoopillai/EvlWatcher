@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <UseWPF>true</UseWPF>
     <RootNamespace>EvlWatcherConsole</RootNamespace>
     <AssemblyName>EvlWatcherConsole</AssemblyName>
@@ -10,12 +11,11 @@
     <ApplicationIcon>Resources\EvlWatcher.ico</ApplicationIcon>
     <!-- version and metadata live in Properties\AssemblyInfo.cs -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <!-- the UI is English-only; don't ship the WCF packages' localized resource folders -->
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.ServiceModel.NetNamedPipe" Version="10.1.0" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Runtime.Serialization" />
   </ItemGroup>
 
   <!--

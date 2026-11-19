@@ -160,7 +160,7 @@ namespace EvlWatcherConsole.Rules
             {
                 foreach (string b in rule.RegexBoosters)
                 {
-                    if (!eventXml.Contains(b, StringComparison.Ordinal))
+                    if (eventXml.IndexOf(b, StringComparison.Ordinal) < 0)
                         return null;
                 }
             }

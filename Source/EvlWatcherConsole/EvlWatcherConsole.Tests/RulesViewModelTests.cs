@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using EvlWatcher.WCF.DTO;
 using EvlWatcherConsole.Rules;
 using EvlWatcherConsole.ViewModel;

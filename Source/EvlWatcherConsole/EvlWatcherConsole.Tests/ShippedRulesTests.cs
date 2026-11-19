@@ -1,7 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Xml.Linq;
 using EvlWatcher.WCF.DTO;
 using EvlWatcherConsole.Rules;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace EvlWatcherConsole.Tests
 {
