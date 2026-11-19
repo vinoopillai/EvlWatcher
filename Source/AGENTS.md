@@ -129,9 +129,9 @@ Most changes people contribute are rule changes. Each `<Task Name="..." Active="
 - Signing (no `signtool` needed). Use a code-signing cert from the Windows store, or `Get-PfxCertificate <file.pfx>`, then:
   ```powershell
   $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
-  Set-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.1-setup.exe -Certificate $cert `
+  Set-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.2-setup.exe -Certificate $cert `
       -HashAlgorithm SHA256 -TimestampServer http://timestamp.digicert.com
-  Get-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.1-setup.exe   # Status should be Valid
+  Get-AuthenticodeSignature ..\Versions\v3\EvlWatcher-v3.0.2-setup.exe   # Status should be Valid
   ```
   The timestamp keeps the signature valid after the certificate expires. Sign the final setup.exe only: signing changes its hash, so publish the hash after signing.
 - Build the console for the installer with `dotnet publish -c Release -p:PublishProfile=Installer` (`Properties/PublishProfiles/Installer.pubxml`). This produces one framework-dependent `win-x64` exe in `bin\publish\`. Target machines need the **.NET 10 Desktop Runtime (x64)**. If it's missing, the installer warns and offers the download page but still installs: the service doesn't need it, and silent `/S` rollouts must not stop there.

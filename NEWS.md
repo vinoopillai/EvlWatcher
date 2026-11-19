@@ -1,5 +1,9 @@
 ## NEWS 
 
+### 2026-11-19 preparing the release of v3.0.2
+- SQL Server rule catches every failed login (event 18456), not only wrong passwords; existing installs: update the rule (see release notes)
+- the new-rule wizard accepts XML copied from Event Viewer with "- " markers
+
 ### 2026-11-19 preparing the release of v3.0.1
 - fixes the console making the service stop answering after 1-2 minutes (Rules tab stuck on "Loading rules..."): the console now closes every connection to the service
 

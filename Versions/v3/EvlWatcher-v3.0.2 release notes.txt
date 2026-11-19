@@ -1,0 +1,8 @@
+### 2026-11 release of v3.0.2
+- the SQL Server rule (BlockMSSQLBruteforce) now catches every failed login (event 18456), whatever the reason: wrong password, unknown login, "an error occurred while evaluating the password", ... Before, only "Password did not match" was counted.
+  IMPORTANT for upgrades: the installer keeps your existing config.xml, so update the rule yourself. In the console, open Rules > BlockMSSQLBruteforce > Advanced and set
+    Booster words (one per line):  >18456</EventID>   and   [CLIENT:
+    Regex:                          \[CLIENT: ([0-9A-Fa-f:.]+)\]
+  then Save (applies immediately). Or copy the rule from config.default.xml next to config.xml.
+- the "New rule from an event" wizard now accepts XML copied from Event Viewer's XML View with "- " markers in front of some lines
+- everything else as in v3.0.1
