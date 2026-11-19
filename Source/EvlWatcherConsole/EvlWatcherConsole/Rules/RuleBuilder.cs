@@ -23,12 +23,18 @@ namespace EvlWatcherConsole.Rules
 
         private const string ProviderPrefix = "Microsoft-Windows-";
 
+        private static readonly Regex EventViewerCollapseMarker = new Regex(@"(?m)^([ \t]*)-[ \t]+(?=<)", RegexOptions.Compiled);
+
         public static bool TryParse(string text, out ParsedEvent ev, out string error)
         {
             ev = null;
             error = ParseErrorMessage;
             if (string.IsNullOrWhiteSpace(text))
                 return false;
+
+            // Event Viewer's XML View prefixes expandable elements with "- " when copied; only a "- " at the start of a line
+            // that is directly followed by a tag is removed, so text inside values is never changed.
+            text = EventViewerCollapseMarker.Replace(text, "$1");
 
             XDocument doc;
             try

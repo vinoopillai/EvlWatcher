@@ -39,6 +39,33 @@ namespace EvlWatcherConsole.Tests
         }
 
         [TestMethod]
+        public void TryParse_AcceptsEventViewerCollapseMarkers()
+        {
+            // copied from Event Viewer's XML View: expandable elements are prefixed with "- " (and leading spaces)
+            string pasted =
+                "- <Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">\r\n" +
+                "- <System>\r\n" +
+                "  <Provider Name=\"MSSQLSERVER\" /> \r\n" +
+                "  <EventID Qualifiers=\"49152\">18456</EventID> \r\n" +
+                "  <Channel>Application</Channel> \r\n" +
+                "  </System>\r\n" +
+                "- <EventData>\r\n" +
+                "  <Data>sa</Data> \r\n" +
+                "  <Data>Reason: An error occurred while evaluating the password. - check the password</Data> \r\n" +
+                "  <Data>[CLIENT: 203.0.113.44]</Data> \r\n" +
+                "  </EventData>\r\n" +
+                "  </Event>";
+
+            Assert.IsTrue(RuleBuilder.TryParse(pasted, out ParsedEvent ev, out string error), error);
+            Assert.AreEqual("MSSQLSERVER", ev.Provider);
+            Assert.AreEqual("18456", ev.EventId);
+            Assert.AreEqual("Application", ev.Channel);
+            // text content that merely contains " - " is untouched
+            StringAssert.Contains(ev.PastedText, "evaluating the password. - check the password");
+            StringAssert.Contains(ev.CompactXml, "evaluating the password. - check the password");
+        }
+
+        [TestMethod]
         public void TryParse_RejectsNonEventRootAndEmpty()
         {
             Assert.IsFalse(RuleBuilder.TryParse("<Foo/>", out _, out string e1));
