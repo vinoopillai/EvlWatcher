@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <None Include="Samples\*.xml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- the rules the installer ships, so ShippedRulesTests check what users actually get -->
+    <None Include="..\..\EvlWatcher\EvlWatcher\config.xml" Link="ShippedConfig\config.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

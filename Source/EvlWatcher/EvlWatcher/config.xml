@@ -428,7 +428,7 @@
 		<Task Name="BlockMSSQLBruteforce" Active="true">
 			<!-- the description ..-->
 			<Description>
-				This rule checks for failed SQL Server logins.
+				This rule checks for failed SQL Server logins (event 18456, whatever the reason: wrong password, unknown login, error evaluating the password, ...).
 			</Description>
 			<!-- this is the time a temporary ban is issued for, in seconds-->
 			<LockTime>
@@ -463,11 +463,13 @@
 			</EventPath>
 			<!-- This was introduced because sole regex matching is too CPU intensive. it incredibly speeds up the filtering when you enter some (or at least one) words. **all** of these words must be contained in the LogEntry to undergo the regex inspection-->
 			<RegexBoosters>
-				<Booster>Password did not match that for the login provided</Booster>
+				<!-- event 18456 = login failed; every reason ends with "[CLIENT: <address>]" (no IP for "<local machine>") -->
+				<Booster>&gt;18456&lt;/EventID&gt;</Booster>
+				<Booster>[CLIENT: </Booster>
 			</RegexBoosters>
 			<!-- This is the regex that tries to extract an IP from the entries that contain the booster words for more infos see regex101.com-->
 			<Regex>
-				(\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b)
+				\[CLIENT: ([0-9A-Fa-f:.]+)\]
 			</Regex>
 		</Task>
 		<Task Name="BlockVPNBrutersBySecurity6273" Active="true">
