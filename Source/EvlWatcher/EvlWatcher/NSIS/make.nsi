@@ -2,13 +2,12 @@
 ; (requires the nsSCM plugin):
 ;   EvlWatcher.exe, EvlWatcher.WCF.dll, config.xml, license.txt, EvlWatcher.ico
 ;       -> from Source\EvlWatcher\EvlWatcher\bin\Release\  (msbuild, .NET Framework 4.7.2)
-;   EvlWatcherConsole.exe
-;       -> from Source\EvlWatcherConsole\EvlWatcherConsole\bin\publish\
-;          dotnet publish -c Release -p:PublishProfile=Installer
-;          (single-file, framework-dependent, win-x64: needs the .NET 10 Desktop Runtime)
+;   EvlWatcherConsole.exe, EvlWatcherConsole.exe.config
+;       -> from Source\EvlWatcherConsole\EvlWatcherConsole\bin\Release\net472\
+;          dotnet build Source\EvlWatcherConsole\EvlWatcherConsole.sln -c Release
 ;
-; Supported targets: 64-bit Windows 10 (1607+), Windows 11, Windows Server 2016/2019/2022/2025
-; with Desktop Experience. The service itself only needs .NET Framework 4.7.2.
+; Supported targets: Windows 8.1 / Server 2012 and later (32- or 64-bit) with Desktop Experience.
+; Service and console need .NET Framework 4.7.2 (built into Windows 10 1803+, 11 and Server 2019+).
 ;
 ; Compile with NSIS 3.x: put nsSCM.dll (https://nsis.sourceforge.io/NsSCM_plug-in) into
 ; <NSIS>\Plugins\x86-ansi, then run:  makensis make.nsi
@@ -18,7 +17,7 @@ Unicode false
 
 Name "EvlWatcher"
 
-!define DOTNET_DOWNLOAD_URL "https://dotnet.microsoft.com/download/dotnet/10.0"
+!define DOTNET_DOWNLOAD_URL "https://dotnet.microsoft.com/download/dotnet-framework/net472"
 
 ; The file to write
 Icon EvlWatcher.ico
@@ -68,6 +67,7 @@ Section "EvlWatcher Service"
   Delete $INSTDIR\EvlWatcher.exe
   Delete $INSTDIR\license.txt
   Delete $INSTDIR\EvlWatcherConsole.exe
+  Delete $INSTDIR\EvlWatcherConsole.exe.config
   Delete $INSTDIR\EvlWatcher.WCF.dll
   ; config.xml is deliberately NOT deleted: it holds the admin's bans, whitelist and rule tweaks.
 
@@ -89,17 +89,18 @@ Section "EvlWatcher Service"
   ; their config.xml and pick up new or improved rules.
   File "/oname=config.default.xml" "config.xml"
   File "EvlWatcherConsole.exe"
+  File "EvlWatcherConsole.exe.config"
 
-  ; The console (not the service) needs the .NET 10 Desktop Runtime (x64).
-  ; Only warn: the service still installs and protects the machine without it,
-  ; and silent (/S) rollouts must not stop here.
-  FindFirst $0 $1 "$PROGRAMFILES64\dotnet\shared\Microsoft.WindowsDesktop.App\10.*"
-  FindClose $0
-  StrCmp $1 "" 0 dotnet_found   ; $1 = first matching version folder, empty if none
-    DetailPrint "Warning: .NET 10 Desktop Runtime (x64) not found. EvlWatcherConsole will not start until it is installed."
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "EvlWatcherConsole needs the .NET 10 Desktop Runtime (x64), which is not installed.$\r$\n$\r$\nThe EvlWatcher service will still be installed and run normally.$\r$\n$\r$\nOpen the download page now?" /SD IDNO IDNO dotnet_found
+  ; The service and the console both need .NET Framework 4.7.2 or later (Release >= 461808).
+  ; Built into Windows 10 1803+, 11 and Server 2019+; older systems need it installed.
+  ; Only warn: silent (/S) rollouts must not stop here, and it can be installed afterwards.
+  ReadRegDWORD $0 HKLM "SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" "Release"
+  IntCmp $0 461808 netfx_found netfx_missing netfx_found
+  netfx_missing:
+    DetailPrint "Warning: .NET Framework 4.7.2 not found. The EvlWatcher service and console will not run until it is installed."
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "EvlWatcher needs .NET Framework 4.7.2 or later, which is not installed.$\r$\n$\r$\nNeither the EvlWatcher service nor the console will run until it is installed. On Windows Server 2012 (and Windows 7 / Server 2008 R2), install update KB4019990 first.$\r$\n$\r$\nOpen the download page now?" /SD IDNO IDNO netfx_found
     ExecShell "open" "${DOTNET_DOWNLOAD_URL}"
-  dotnet_found:
+  netfx_found:
 
   ; Write the installation path into the registry
   WriteRegStr HKLM SOFTWARE\EvlWatcher "Install_Dir" "$INSTDIR"
@@ -164,6 +165,7 @@ Section "Uninstall"
   Delete $INSTDIR\config.xml
   Delete $INSTDIR\config.default.xml
   Delete $INSTDIR\EvlWatcherConsole.exe
+  Delete $INSTDIR\EvlWatcherConsole.exe.config
   Delete $INSTDIR\EvlWatcher.WCF.dll
 
 
