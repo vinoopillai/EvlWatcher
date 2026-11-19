@@ -5,7 +5,9 @@
         xmlns:view="clr-namespace:EvlWatcherConsole.View"
         Title="EvlWatcher v3.0.2 Console"
         Height="720" Width="1040" MinHeight="600" MinWidth="880"
-        Icon="pack://application:,,,/Resources/EvlWatcher.ico">
+        Icon="pack://application:,,,/Resources/EvlWatcher.ico"
+        Background="{DynamicResource WindowBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        FontFamily="{StaticResource ContentFontFamily}" FontSize="14" UseLayoutRounding="True">
     <Window.DataContext>
         <vm:MainWindowViewModel/>
     </Window.DataContext>
@@ -37,7 +39,7 @@
         </Style>
 
         <Style x:Key="MonoTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="13" />
         </Style>
     </Window.Resources>

@@ -5,10 +5,8 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- WPF's built-in Fluent theme; follows the Windows light/dark setting.
-                     Works on Windows 10 / Server 2019 too: icons fall back from
-                     "Segoe Fluent Icons" (Win11) to "Segoe MDL2 Assets" (Win10+). -->
-                <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml" />
+                <!-- EvlWatcher's own light theme (Themes/Light.xaml): same look on every Windows version. -->
+                <ResourceDictionary Source="Themes/Light.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Only use glyphs that exist in BOTH Segoe Fluent Icons and Segoe MDL2 Assets. -->
@@ -48,7 +46,7 @@
 
             <!-- Shared by the Rules tab and the new-rule wizard -->
             <Style x:Key="MonoTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New" />
+                <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
                 <Setter Property="FontSize" Value="13" />
             </Style>
 
