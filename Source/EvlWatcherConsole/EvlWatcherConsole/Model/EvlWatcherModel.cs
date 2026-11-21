@@ -8,7 +8,7 @@ using System.ServiceModel;
 
 namespace EvlWatcherConsole.Model
 {
-    public class EvlWatcherModel : EvlWatcherConsole.Rules.IRuleClient
+    public class EvlWatcherModel : EvlWatcherConsole.Rules.IRuleClient, EvlWatcherConsole.Analysis.IAnalyzerClient
     {
         #region private members
 
@@ -141,6 +141,47 @@ namespace EvlWatcherConsole.Model
         void EvlWatcherConsole.Rules.IRuleClient.SetRuleActive(string name, bool active)
         {
             CallRuleService(() => Call(s => s.SetRuleActive(name, active)));
+        }
+
+        #endregion
+
+        #region IAnalyzerClient
+
+        IList<GenericIPBlockingTaskDTO> EvlWatcherConsole.Analysis.IAnalyzerClient.GetRules()
+        {
+            return ((EvlWatcherConsole.Rules.IRuleClient)this).GetRules();
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetWhiteListPatterns()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetWhiteListEntries()));
+            return result ?? new string[0];
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetTemporarilyBannedIPs()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetTemporarilyBannedIPs()));
+            return result ?? new string[0];
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetPermanentlyBannedIPs()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetPermanentlyBannedIPs()));
+            return result ?? new string[0];
+        }
+
+        void EvlWatcherConsole.Analysis.IAnalyzerClient.BanPermanently(IList<string> addresses)
+        {
+            string[] list = addresses.ToArray();
+            CallRuleService(() => Call(s => s.SetPermanentBans(list)));
+        }
+
+        void EvlWatcherConsole.Analysis.IAnalyzerClient.SaveRule(GenericIPBlockingTaskDTO rule)
+        {
+            CallRuleService(() => Call(s => s.SaveRule(rule, false)));
         }
 
         private static void CallRuleService(Action call)
