@@ -52,6 +52,15 @@ namespace EvlWatcherConsole.Analysis
 
         public ISet<string> LocalAddresses { get; set; } = new HashSet<string>();
 
+        /// <summary>The service's scan interval; the effective window of rules with OnlyNewEvents.</summary>
+        public int CheckIntervalSeconds { get; set; } = 30;
+
+        /// <summary>Set by the analyzer: whether the Security log could be read this scan.</summary>
+        public bool SecurityLogRead { get; set; }
+
+        /// <summary>Set by the analyzer: the oldest Security event read (older events in other logs can't be cross-checked).</summary>
+        public DateTime? SecurityOldestUtc { get; set; }
+
         public DateTime FromUtc => NowUtc - Range.ToTimeSpan();
     }
 
@@ -66,6 +75,9 @@ namespace EvlWatcherConsole.Analysis
         public IList<string> LogsUnreadable { get; set; } = new List<string>();
 
         public int EventsRead { get; set; }
+
+        /// <summary>Events held in memory for the checks (the rest of a rule's log is reduced to rule hits while reading).</summary>
+        public int EventsKept { get; set; }
 
         public TimeSpan Duration { get; set; }
 
@@ -82,6 +94,9 @@ namespace EvlWatcherConsole.Analysis
         public const int HeavyAttackerAttempts = 20;
         public const int RdpFloodConnections = 50;
         public const int FailuresBeforeLogon = 3;
+
+        /// <summary>Failures count towards a "possible break-in" only within this time before the logon.</summary>
+        public static readonly TimeSpan FailuresBeforeLogonWindow = TimeSpan.FromHours(1);
         public const int LockoutWarningCount = 3;
         public const int ServiceCrashWarningCount = 2;
         public const int AppCrashWarningCount = 3;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 
 namespace EvlWatcherConsole.Analysis
 {
@@ -31,11 +32,12 @@ namespace EvlWatcherConsole.Analysis
 
         #region public operations
 
-        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
+        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input, CancellationToken ct = default(CancellationToken))
         {
             List<AnalyzedEvent> all = eventsByLog.Values.SelectMany(v => v).ToList();
             var findings = new List<Finding>();
-            findings.AddRange(LogonsAfterFailures(all, input));
+            findings.AddRange(LogonsAfterFailures(all, input, ct));
+            ct.ThrowIfCancellationRequested();
             findings.AddRange(LogCleared(all));
             findings.AddRange(ServicesInstalled(all));
             findings.AddRange(GroupChanges(all));
@@ -49,28 +51,49 @@ namespace EvlWatcherConsole.Analysis
 
         #region checks
 
-        private static IEnumerable<Finding> LogonsAfterFailures(List<AnalyzedEvent> all, AnalyzerInput input)
+        private static IEnumerable<Finding> LogonsAfterFailures(List<AnalyzedEvent> all, AnalyzerInput input, CancellationToken ct)
         {
-            var failures = all.Where(e => e.EventId == 4625 && AttackChecks.Is(e.Provider, Auditing))
+            Dictionary<string, List<(string User, DateTime TimeUtc)>> failuresByIp = all
+                .Where(e => e.EventId == 4625 && AttackChecks.Is(e.Provider, Auditing))
                 .Select(e => new { Ip = Ip(e), User = e.Get("TargetUserName") ?? "", e.TimeUtc })
                 .Where(f => f.Ip != null)
-                .ToList();
+                .GroupBy(f => f.Ip)
+                .ToDictionary(g => g.Key, g => g.Select(f => (f.User, f.TimeUtc)).OrderBy(f => f.TimeUtc).ToList());
 
             var logons = all.Where(e => e.EventId == 4624 && AttackChecks.Is(e.Provider, Auditing)
-                                        && (e.Get("LogonType") == "3" || e.Get("LogonType") == "10"))
+                                        && (e.Get("LogonType") == "3" || e.Get("LogonType") == "10")
+                                        && !IsAnonymous(e))
                 .Select(e => new { Ip = Ip(e), User = e.Get("TargetUserName") ?? "", e.TimeUtc, Type = e.Get("LogonType") })
-                .Where(l => l.Ip != null)
+                .Where(l => l.Ip != null && failuresByIp.ContainsKey(l.Ip))
                 .ToList();
 
             foreach (var group in logons.GroupBy(l => new { l.Ip, User = l.User.ToUpperInvariant() }))
             {
-                var logon = group.OrderBy(l => l.TimeUtc).Last();
-                IPAddress ip = IPAddress.Parse(logon.Ip);
+                ct.ThrowIfCancellationRequested();
+                IPAddress ip = IPAddress.Parse(group.Key.Ip);
                 if (AddressClassifier.IsLocal(ip, input.LocalAddresses))
                     continue;
 
-                var before = failures.Where(f => f.Ip == logon.Ip && f.TimeUtc < logon.TimeUtc).ToList();
-                if (before.Count < AnalyzerThresholds.FailuresBeforeLogon)
+                // Only failures shortly before a logon, and after the previous successful logon of the same account from that
+                // address, count: old typos followed by normal daily logons are not a break-in.
+                List<(string User, DateTime TimeUtc)> failures = failuresByIp[group.Key.Ip];
+                var logon = group.First();
+                List<(string User, DateTime TimeUtc)> before = null;
+                DateTime previous = DateTime.MinValue;
+                foreach (var l in group.OrderBy(x => x.TimeUtc))
+                {
+                    DateTime from = l.TimeUtc - AnalyzerThresholds.FailuresBeforeLogonWindow;
+                    if (previous > from)
+                        from = previous;
+                    var candidates = failures.Where(f => f.TimeUtc >= from && f.TimeUtc < l.TimeUtc).ToList();
+                    if (candidates.Count >= AnalyzerThresholds.FailuresBeforeLogon)
+                    {
+                        logon = l;
+                        before = candidates;
+                    }
+                    previous = l.TimeUtc;
+                }
+                if (before == null)
                     continue;
 
                 bool sameAccount = before.Any(f => string.Equals(f.User, logon.User, StringComparison.OrdinalIgnoreCase));
@@ -187,6 +210,10 @@ namespace EvlWatcherConsole.Analysis
 
         private static string Ip(AnalyzedEvent e) =>
             AddressClassifier.TryParse(e.Get("IpAddress"), out IPAddress ip) ? ip.ToString() : null;
+
+        /// <summary>Null sessions and NLA pre-authentication: "ANONYMOUS LOGON" (S-1-5-7), routine on exposed servers.</summary>
+        private static bool IsAnonymous(AnalyzedEvent e) =>
+            e.Get("TargetUserSid") == "S-1-5-7" || string.Equals(e.Get("TargetUserName"), "ANONYMOUS LOGON", StringComparison.OrdinalIgnoreCase);
 
         #endregion
     }

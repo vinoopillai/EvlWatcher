@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net;
 using EvlWatcherConsole.Analysis;
@@ -41,6 +42,22 @@ namespace EvlWatcherConsole.Tests.Analysis
         public void IsPrivate(string value, bool expected)
         {
             Assert.AreEqual(expected, AddressClassifier.IsPrivate(IPAddress.Parse(value)));
+        }
+
+        [TestMethod]
+        public void IPv4MappedAddressesAreNormalised()
+        {
+            Assert.IsTrue(AddressClassifier.TryParse("::ffff:192.168.1.5", out IPAddress ip));
+            Assert.AreEqual(IPAddress.Parse("192.168.1.5"), ip);
+            Assert.IsTrue(AddressClassifier.IsPrivate(ip));
+        }
+
+        [TestMethod]
+        public void MalformedRecordIsRejectedNotThrown()
+        {
+            Assert.IsFalse(AnalyzedEvent.TryFromXml("System", "<Event><System><EventID>7</EventID>\u0001</System>", out _));
+            Assert.IsTrue(AnalyzedEvent.TryFromXml("System", EventSamples.Disk7(DateTime.UtcNow).Xml, out AnalyzedEvent ok));
+            Assert.AreEqual(7, ok.EventId);
         }
 
         [TestMethod]

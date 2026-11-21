@@ -65,6 +65,13 @@ namespace EvlWatcherConsole.Tests.Analysis
         }
 
         [TestMethod]
+        public void SqlSlowIoAtInformationLevelIsReported()
+        {
+            // SQL Server logs error 833 (slow I/O) at Information level
+            Assert.AreEqual(FindingSeverity.Warning, Run(EventSamples.SqlSlowIo833(T0)).Single().Severity);
+        }
+
+        [TestMethod]
         public void NtfsErrorIsCritical()
         {
             Assert.AreEqual(FindingSeverity.Critical, Run(EventSamples.NtfsCorruption55(T0)).Single().Severity);

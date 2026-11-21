@@ -32,6 +32,8 @@ namespace EvlWatcherConsole.Tests
         public IList<string> GetPermanentlyBannedIPs() { MaybeFail(false); return new List<string>(); }
         public void BanPermanently(IList<string> addresses) { MaybeFail(true); Bans.Add(addresses.ToList()); }
         public void SaveRule(GenericIPBlockingTaskDTO rule) { MaybeFail(true); Saved.Add(rule); }
+        public int CheckInterval = 30;
+        public int GetCheckIntervalSeconds() { MaybeFail(false); return CheckInterval; }
 
         private static GenericIPBlockingTaskDTO Copy(GenericIPBlockingTaskDTO r) => new GenericIPBlockingTaskDTO
         {

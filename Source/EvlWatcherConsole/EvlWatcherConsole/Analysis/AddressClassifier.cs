@@ -39,7 +39,8 @@ namespace EvlWatcherConsole.Analysis
             if (parsed.AddressFamily == AddressFamily.InterNetworkV6 && s.IndexOf(':') < 0)
                 return false;
 
-            ip = parsed;
+            // ::ffff:192.168.1.5 is an IPv4 address; classify and whitelist it as one
+            ip = parsed.IsIPv4MappedToIPv6 ? parsed.MapToIPv4() : parsed;
             return true;
         }
 
@@ -53,6 +54,8 @@ namespace EvlWatcherConsole.Analysis
         /// <summary>10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7, fe80::/10.</summary>
         public static bool IsPrivate(IPAddress ip)
         {
+            if (ip.IsIPv4MappedToIPv6)
+                ip = ip.MapToIPv4();
             byte[] b = ip.GetAddressBytes();
             if (ip.AddressFamily == AddressFamily.InterNetwork)
             {

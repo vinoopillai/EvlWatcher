@@ -79,6 +79,43 @@ namespace EvlWatcherConsole.Tests.Analysis
         }
 
         [TestMethod]
+        public void OldTyposThenDailyLogonsAreNotReported()
+        {
+            // 3 typos two days before, a successful logon after them, then daily logons: nothing suspicious now
+            DateTime start = EventSamples.Utc("2026-11-01T09:00:00Z");
+            var events = Enumerable.Range(0, 3).Select(i => EventSamples.Failed4625("5.175.140.23", start.AddMinutes(i)))
+                .Concat(Enumerable.Range(0, 5).Select(d => EventSamples.Logon4624("5.175.140.23", start.AddDays(d + 2), "administrator", 10)))
+                .ToArray();
+            AnalyzerInput input = Input();
+            input.Range = AnalysisRange.Last30Days;
+            Assert.AreEqual(0, SecurityChecks.Run(events.GroupBy(e => e.LogName).ToDictionary(g => g.Key, g => (IList<AnalyzedEvent>)g.ToList()), input).Count);
+        }
+
+        [TestMethod]
+        public void FailuresLongBeforeTheLogonDoNotCount()
+        {
+            var events = Failures("5.175.140.23", 5)
+                .Concat(new[] { EventSamples.Logon4624("5.175.140.23", T0.AddHours(3), "administrator", 3) }).ToArray();
+            Assert.AreEqual(0, Run(events).Count);
+        }
+
+        [TestMethod]
+        public void AnonymousLogonIsIgnored()
+        {
+            Assert.AreEqual(0, Run(Failures("5.175.140.23", 5)
+                .Concat(new[] { EventSamples.Logon4624("5.175.140.23", T0.AddMinutes(10), "ANONYMOUS LOGON", 3) }).ToArray()).Count);
+        }
+
+        [TestMethod]
+        public void IPv4MappedLanAddressIsNotCritical()
+        {
+            Finding f = Run(Failures("::ffff:192.168.1.20", 5)
+                .Concat(new[] { EventSamples.Logon4624("::ffff:192.168.1.20", T0.AddMinutes(10), "administrator", 3) }).ToArray()).Single();
+            Assert.AreEqual(FindingSeverity.Warning, f.Severity);
+            Assert.AreEqual(0, f.Actions.Count);
+        }
+
+        [TestMethod]
         public void LogClearedIsCritical()
         {
             Finding f = Run(EventSamples.LogCleared1102(T0, "admin2")).Single();

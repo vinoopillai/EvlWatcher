@@ -184,6 +184,13 @@ namespace EvlWatcherConsole.Model
             CallRuleService(() => Call(s => s.SaveRule(rule, false)));
         }
 
+        int EvlWatcherConsole.Analysis.IAnalyzerClient.GetCheckIntervalSeconds()
+        {
+            int seconds = 30;
+            CallRuleService(() => seconds = Call(s => s.GetGlobalConfig()).EventLogInterval);
+            return seconds > 0 ? seconds : 30;
+        }
+
         private static void CallRuleService(Action call)
         {
             try

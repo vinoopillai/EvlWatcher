@@ -104,6 +104,11 @@ namespace EvlWatcherConsole.Tests.Analysis
             AnalyzedEvent.FromXml(System, Envelope(System, "Microsoft-Windows-Ntfs", 98, utc,
                 "<EventData><Data Name='DriveName'>C:</Data><Data Name='DeviceName'>\\Device\\HarddiskVolume3</Data></EventData>", level: 4));
 
+        /// <summary>SQL Server error 833 (slow I/O), which SQL Server logs at Information level.</summary>
+        public static AnalyzedEvent SqlSlowIo833(DateTime utc) =>
+            AnalyzedEvent.FromXml(Application, Envelope(Application, "MSSQLSERVER", 833, utc,
+                "<EventData><Data>15</Data><Data>D:\\Data\\sales.mdf</Data></EventData>", level: 4));
+
         /// <summary>Ntfs 55 as an Error: corruption found.</summary>
         public static AnalyzedEvent NtfsCorruption55(DateTime utc) =>
             AnalyzedEvent.FromXml(System, Envelope(System, "Ntfs", 55, utc,

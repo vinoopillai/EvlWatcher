@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using EvlWatcher.WCF.DTO;
-using EvlWatcherConsole.Rules;
 
 namespace EvlWatcherConsole.Analysis
 {
     /// <summary>
-    /// Group 1: attacks by IP. Events are matched to rules the way the service does it (RuleBuilder.Match), so the
-    /// analyzer sees exactly the attempts a rule counts.
+    /// Group 1: attacks by IP. Attempts are what the rules count (matched like the service, see <see cref="RuleMatcher"/>).
+    /// Addresses that also logged on successfully are real users, not attackers, and are never reported here.
     /// </summary>
     public static class AttackChecks
     {
@@ -18,20 +18,54 @@ namespace EvlWatcherConsole.Analysis
 
         private const string RdpCoreProvider = "Microsoft-Windows-RemoteDesktopServices-RdpCoreTS";
         private const string SecurityAuditing = "Microsoft-Windows-Security-Auditing";
+        private const int BanAllListedAddresses = 20;
 
         #endregion
 
         #region public operations
 
-        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
+        /// <summary>Matches the rules against the events' XML first (used by tests and small inputs).</summary>
+        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input, CancellationToken ct = default(CancellationToken))
         {
-            var findings = new List<Finding>();
+            var hits = new List<RuleHit>();
             if (input.Rules != null)
             {
-                foreach (GenericIPBlockingTaskDTO rule in input.Rules.Where(r => r.Active && r.TriggerCount > 0))
-                    findings.AddRange(CheckRule(rule, eventsByLog, input));
+                foreach (GenericIPBlockingTaskDTO rule in input.Rules.Where(r => r.Active))
+                {
+                    var matcher = new RuleMatcher(rule);
+                    foreach (string log in Logs(rule))
+                    {
+                        if (!TryGetLog(eventsByLog, log, out IList<AnalyzedEvent> events))
+                            continue;
+                        foreach (AnalyzedEvent ev in events)
+                        {
+                            IPAddress ip = matcher.Match(ev.Xml);
+                            if (ip != null)
+                                hits.Add(new RuleHit(rule.TaskName, ip, ev.TimeUtc));
+                        }
+                    }
+                }
             }
-            findings.AddRange(CheckRdpFlood(eventsByLog, input));
+            return Run(hits, eventsByLog, input, ct);
+        }
+
+        public static IList<Finding> Run(IEnumerable<RuleHit> hits, IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input, CancellationToken ct = default(CancellationToken))
+        {
+            HashSet<string> loggedOn = SuccessfulLogonAddresses(eventsByLog);
+            var findings = new List<Finding>();
+
+            if (input.Rules != null)
+            {
+                ILookup<string, RuleHit> byRule = hits.ToLookup(h => h.RuleName);
+                foreach (GenericIPBlockingTaskDTO rule in input.Rules.Where(r => r.Active && r.TriggerCount > 0))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    findings.AddRange(CheckRule(rule, byRule[rule.TaskName], loggedOn, input));
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            findings.AddRange(CheckRdpFlood(eventsByLog, loggedOn, input));
             return findings;
         }
 
@@ -46,46 +80,53 @@ namespace EvlWatcherConsole.Analysis
             if (addresses.Count == 0)
                 return null;
 
+            string list = string.Join("\n", addresses.Take(BanAllListedAddresses));
+            if (addresses.Count > BanAllListedAddresses)
+                list += $"\n… and {addresses.Count - BanAllListedAddresses} more";
+
             return new FindingAction
             {
                 Kind = FindingActionKind.BanAll,
                 Addresses = addresses,
                 Label = $"Ban all {addresses.Count} unbanned attackers",
-                ConfirmationText = $"Add these {addresses.Count} addresses to the permanent ban list?\n\n" + string.Join("\n", addresses) +
+                ConfirmationText = $"Add these {addresses.Count} addresses to the permanent ban list?\n\n" + list +
                                    "\n\nPermanent bans are never lifted automatically. You can remove them on the Bans & Whitelist tab."
             };
         }
+
+        public static FindingAction Ban(string ip) => new FindingAction
+        {
+            Kind = FindingActionKind.BanPermanently,
+            Addresses = new[] { ip },
+            Label = "Ban permanently",
+            ConfirmationText = $"Add {ip} to the permanent ban list?\n\nPermanent bans are never lifted automatically. You can remove it on the Bans & Whitelist tab."
+        };
 
         #endregion
 
         #region rule checks
 
-        private static IEnumerable<Finding> CheckRule(GenericIPBlockingTaskDTO rule, IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
+        private static IEnumerable<Finding> CheckRule(GenericIPBlockingTaskDTO rule, IEnumerable<RuleHit> hits, HashSet<string> loggedOn, AnalyzerInput input)
         {
             var attempts = new Dictionary<string, List<DateTime>>();
-            foreach (string log in (rule.EventPath ?? new List<string>()).Select(p => p.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (RuleHit hit in hits)
             {
-                if (!TryGetLog(eventsByLog, log, out IList<AnalyzedEvent> events))
+                if (!IsBannable(hit.Ip, input))
                     continue;
-                foreach (AnalyzedEvent ev in events)
-                {
-                    IPAddress ip = RuleBuilder.Match(rule, ev.Xml);
-                    if (ip == null || !IsBannable(ip, input))
-                        continue;
-                    string key = ip.ToString();
-                    if (!attempts.TryGetValue(key, out List<DateTime> times))
-                        attempts[key] = times = new List<DateTime>();
-                    times.Add(ev.TimeUtc);
-                }
+                string key = Normalize(hit.Ip).ToString();
+                if (!attempts.TryGetValue(key, out List<DateTime> times))
+                    attempts[key] = times = new List<DateTime>();
+                times.Add(hit.TimeUtc);
             }
 
-            int window = Math.Max(1, rule.EventAge);
+            // OnlyNew rules count only the events of one service cycle, so their real window is the check interval
+            int window = rule.OnlyNewEvents ? Math.Max(1, input.CheckIntervalSeconds) : Math.Max(1, rule.EventAge);
             var evading = new List<(string ip, List<DateTime> times, TimeSpan needed)>();
             var heavy = new List<(string ip, List<DateTime> times)>();
 
             foreach (KeyValuePair<string, List<DateTime>> kvp in attempts)
             {
-                if (IsBanned(kvp.Key, input))
+                if (IsBanned(kvp.Key, input) || loggedOn.Contains(kvp.Key))
                     continue;
                 List<DateTime> times = kvp.Value.OrderBy(t => t).ToList();
                 if (times.Count >= rule.TriggerCount && MaxInWindow(times, TimeSpan.FromSeconds(window)) < rule.TriggerCount)
@@ -94,7 +135,8 @@ namespace EvlWatcherConsole.Analysis
                     heavy.Add((kvp.Key, times));
             }
 
-            FindingAction widen = BuildWiden(rule, evading.Select(e => e.needed).ToList());
+            FindingAction widen = rule.OnlyNewEvents ? null : BuildWiden(rule, evading.Select(e => e.needed).ToList());
+            string windowText = Duration(TimeSpan.FromSeconds(window));
 
             foreach (var e in evading)
             {
@@ -107,12 +149,15 @@ namespace EvlWatcherConsole.Analysis
                     Address = e.ip,
                     RuleName = rule.TaskName,
                     LastSeenUtc = e.times[e.times.Count - 1],
-                    Title = $"{e.ip} tried {e.times.Count} times in {Duration(span)} (every ~{Duration(every)}) — too slow for rule {rule.TaskName} ({rule.TriggerCount} within {Duration(TimeSpan.FromSeconds(window))})",
-                    Details = $"First attempt {Local(e.times[0])}, last {Local(e.times[e.times.Count - 1])}. It never made {rule.TriggerCount} attempts within {Duration(TimeSpan.FromSeconds(window))}, so the rule didn't ban it.",
-                    Advice = "Ban it permanently. To catch slow attackers like this automatically, widen the rule's window."
+                    Title = $"{e.ip} tried {e.times.Count} times in {Duration(span)} (every ~{Duration(every)}) — too slow for rule {rule.TaskName} ({rule.TriggerCount} within {windowText})",
+                    Details = $"First attempt {Local(e.times[0])}, last {Local(e.times[e.times.Count - 1])}. It never made {rule.TriggerCount} attempts within {windowText}, so the rule didn't ban it. It never logged on successfully."
+                              + (rule.OnlyNewEvents ? " The rule only counts new events, so its window is the service's scan interval." : ""),
+                    Advice = rule.OnlyNewEvents
+                        ? "Ban it permanently. To catch slow attackers automatically, turn off \"Only check new events\" for this rule and give it a longer window."
+                        : "Ban it permanently. To catch slow attackers like this automatically, widen the rule's window."
                 };
                 finding.Actions.Add(Ban(e.ip));
-                if (widen != null)
+                if (widen != null && e.needed.TotalSeconds <= widen.NewEventAgeSeconds)
                     finding.Actions.Add(widen);
                 yield return finding;
             }
@@ -127,7 +172,7 @@ namespace EvlWatcherConsole.Analysis
                     RuleName = rule.TaskName,
                     LastSeenUtc = h.times[h.times.Count - 1],
                     Title = $"{h.ip} tried {h.times.Count} times and isn't banned",
-                    Details = $"Rule {rule.TaskName}. First attempt {Local(h.times[0])}, last {Local(h.times[h.times.Count - 1])}. Its temporary ban has run out or it was removed.",
+                    Details = $"Rule {rule.TaskName}. First attempt {Local(h.times[0])}, last {Local(h.times[h.times.Count - 1])}. It never logged on successfully; its temporary ban has run out or it was removed.",
                     Advice = "Ban it permanently."
                 };
                 finding.Actions.Add(Ban(h.ip));
@@ -173,13 +218,19 @@ namespace EvlWatcherConsole.Analysis
 
         #region RDP flood
 
-        private static IEnumerable<Finding> CheckRdpFlood(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
+        private static IEnumerable<Finding> CheckRdpFlood(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, HashSet<string> loggedOn, AnalyzerInput input)
         {
+            // Without the Security log (or the service's whitelist) a busy legitimate user can't be told from a flood.
+            if (input.Rules == null || !input.SecurityLogRead)
+                yield break;
+
             var connections = new Dictionary<string, List<DateTime>>();
             foreach (KeyValuePair<string, IList<AnalyzedEvent>> log in eventsByLog)
             {
                 foreach (AnalyzedEvent ev in log.Value.Where(e => e.EventId == 131 && Is(e.Provider, RdpCoreProvider)))
                 {
+                    if (input.SecurityOldestUtc.HasValue && ev.TimeUtc < input.SecurityOldestUtc.Value)
+                        continue;
                     if (!AddressClassifier.TryParse(ev.Get("ClientIP"), out IPAddress ip) || !IsBannable(ip, input))
                         continue;
                     string key = ip.ToString();
@@ -189,16 +240,14 @@ namespace EvlWatcherConsole.Analysis
                 }
             }
 
-            var loggedOn = new HashSet<string>(eventsByLog.Values.SelectMany(v => v)
-                .Where(e => e.EventId == 4624 && Is(e.Provider, SecurityAuditing))
-                .Select(e => AddressClassifier.TryParse(e.Get("IpAddress"), out IPAddress ip) ? ip.ToString() : null)
-                .Where(s => s != null));
-
             foreach (KeyValuePair<string, List<DateTime>> kvp in connections)
             {
-                if (kvp.Value.Count < AnalyzerThresholds.RdpFloodConnections || loggedOn.Contains(kvp.Key) || IsBanned(kvp.Key, input))
+                if (loggedOn.Contains(kvp.Key) || IsBanned(kvp.Key, input))
                     continue;
                 List<DateTime> times = kvp.Value.OrderBy(t => t).ToList();
+                if (MaxInWindow(times, TimeSpan.FromHours(1)) < AnalyzerThresholds.RdpFloodConnections)
+                    continue;
+
                 var finding = new Finding
                 {
                     Severity = FindingSeverity.Warning,
@@ -206,7 +255,7 @@ namespace EvlWatcherConsole.Analysis
                     Address = kvp.Key,
                     LastSeenUtc = times[times.Count - 1],
                     Title = $"{kvp.Key} opened {times.Count} Remote Desktop connections without logging on",
-                    Details = $"First {Local(times[0])}, last {Local(times[times.Count - 1])}. Connection floods use server resources even without a password attempt.",
+                    Details = $"At least {AnalyzerThresholds.RdpFloodConnections} within one hour; first {Local(times[0])}, last {Local(times[times.Count - 1])}. Connection floods use server resources even without a password attempt.",
                     Advice = "Ban it permanently."
                 };
                 finding.Actions.Add(Ban(kvp.Key));
@@ -218,18 +267,25 @@ namespace EvlWatcherConsole.Analysis
 
         #region helpers
 
-        internal static FindingAction Ban(string ip) => new FindingAction
-        {
-            Kind = FindingActionKind.BanPermanently,
-            Addresses = new[] { ip },
-            Label = "Ban permanently",
-            ConfirmationText = $"Add {ip} to the permanent ban list?\n\nPermanent bans are never lifted automatically. You can remove it on the Bans & Whitelist tab."
-        };
+        internal static IEnumerable<string> Logs(GenericIPBlockingTaskDTO rule) =>
+            (rule.EventPath ?? new List<string>()).Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase);
 
-        internal static bool IsBannable(IPAddress ip, AnalyzerInput input) =>
-            !AddressClassifier.IsLocal(ip, input.LocalAddresses)
-            && !AddressClassifier.IsPrivate(ip)
-            && !AddressClassifier.IsWhitelisted(ip.ToString(), input.WhitelistPatterns);
+        /// <summary>Addresses with a successful logon (4624) among the events read: real users.</summary>
+        internal static HashSet<string> SuccessfulLogonAddresses(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog) =>
+            new HashSet<string>(eventsByLog.Values.SelectMany(v => v)
+                .Where(e => e.EventId == 4624 && Is(e.Provider, SecurityAuditing))
+                .Select(e => AddressClassifier.TryParse(e.Get("IpAddress"), out IPAddress ip) ? ip.ToString() : null)
+                .Where(s => s != null));
+
+        private static IPAddress Normalize(IPAddress ip) => ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip;
+
+        internal static bool IsBannable(IPAddress ip, AnalyzerInput input)
+        {
+            ip = Normalize(ip);
+            return !AddressClassifier.IsLocal(ip, input.LocalAddresses)
+                && !AddressClassifier.IsPrivate(ip)
+                && !AddressClassifier.IsWhitelisted(ip.ToString(), input.WhitelistPatterns);
+        }
 
         private static bool IsBanned(string ip, AnalyzerInput input) =>
             (input.TemporarilyBanned != null && input.TemporarilyBanned.Contains(ip))

@@ -27,6 +27,12 @@ namespace EvlWatcherConsole.Analysis
             public Func<int, FindingSeverity> Severity;
             public Func<string, int, string> Title;
             public string Advice;
+
+            /// <summary>
+            /// Most providers share IDs with routine Information events (Ntfs 98 "Volume is healthy"), so Information and
+            /// Verbose events are skipped; set for providers that log real problems at Information level (SQL Server 833).
+            /// </summary>
+            public bool IncludeInformational;
         }
 
         private static readonly Check[] Checks =
@@ -100,6 +106,7 @@ namespace EvlWatcherConsole.Analysis
             {
                 Provider = p => Is(p, "MSSQLSERVER") || (p ?? "").StartsWith("MSSQL$", StringComparison.OrdinalIgnoreCase), Ids = new[] { 833, 701 },
                 GroupBy = e => e.Provider,
+                IncludeInformational = true,
                 Severity = n => FindingSeverity.Warning,
                 Title = (g, n) => $"SQL Server ({g}) reports slow disk I/O or memory pressure ({n})",
                 Advice = "Check disk latency and SQL Server's memory settings; these slow every database on the server."
@@ -117,15 +124,16 @@ namespace EvlWatcherConsole.Analysis
 
         #region public operations
 
-        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
+        public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken))
         {
-            // Information (4) and Verbose (5) events are routine: e.g. Ntfs 98 "Volume C: is healthy" shares its ID with real problems.
-            List<AnalyzedEvent> all = eventsByLog.Values.SelectMany(v => v).Where(e => e.Level < 4).ToList();
+            List<AnalyzedEvent> all = eventsByLog.Values.SelectMany(v => v).ToList();
             var findings = new List<Finding>();
 
             foreach (Check check in Checks)
             {
-                foreach (IGrouping<string, AnalyzedEvent> group in all.Where(e => check.Ids.Contains(e.EventId) && check.Provider(e.Provider))
+                ct.ThrowIfCancellationRequested();
+                foreach (IGrouping<string, AnalyzedEvent> group in all.Where(e => check.Ids.Contains(e.EventId) && check.Provider(e.Provider)
+                                                                                  && (check.IncludeInformational || e.Level < 4))
                                                                       .GroupBy(check.GroupBy, StringComparer.OrdinalIgnoreCase))
                 {
                     int count = group.Count();

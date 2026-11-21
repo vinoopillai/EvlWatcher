@@ -59,6 +59,7 @@ namespace EvlWatcherConsole.Analysis
         private static IEnumerable<AnalyzedEvent> ReadAll(EventLogReader reader, string logName, CancellationToken ct)
         {
             using (reader)
+            using (ct.Register(reader.CancelReading)) // ReadEvent can block while the filter scans a large log
             {
                 while (true)
                 {
@@ -72,15 +73,25 @@ namespace EvlWatcherConsole.Analysis
                     {
                         yield break;
                     }
+                    catch (OperationCanceledException)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        throw;
+                    }
                     if (record == null)
+                    {
+                        ct.ThrowIfCancellationRequested(); // CancelReading ends the read like the end of the log
                         yield break;
+                    }
 
                     AnalyzedEvent ev;
+                    bool parsed;
                     using (record)
                     {
-                        ev = AnalyzedEvent.FromXml(logName, record.ToXml());
+                        parsed = AnalyzedEvent.TryFromXml(logName, record.ToXml(), out ev);
                     }
-                    yield return ev;
+                    if (parsed) // a single malformed record must not fail the whole scan
+                        yield return ev;
                 }
             }
         }

@@ -41,6 +41,10 @@ namespace EvlWatcherConsole.Analysis
             Stopwatch watch = Stopwatch.StartNew();
             var result = new AnalysisResult();
             var eventsByLog = new Dictionary<string, IList<AnalyzedEvent>>(StringComparer.OrdinalIgnoreCase);
+            var hits = new List<RuleHit>();
+            List<RuleMatcher> matchers = (input.Rules ?? new List<GenericIPBlockingTaskDTO>()).Where(r => r.Active).Select(r => new RuleMatcher(r)).ToList();
+            input.SecurityLogRead = false;
+            input.SecurityOldestUtc = null;
 
             foreach (KeyValuePair<string, HashSet<int>> plan in BuildLogPlan(input))
             {
@@ -53,19 +57,45 @@ namespace EvlWatcherConsole.Analysis
                     continue;
                 }
 
+                // A rule's log is read in full, but only rule hits and the IDs the other checks need stay in memory.
+                List<RuleMatcher> logMatchers = matchers.Where(m => AttackChecks.Logs(m.Rule).Contains(log, StringComparer.OrdinalIgnoreCase)).ToList();
+                HashSet<int> keepIds = FixedIds(log);
+                bool isSecurity = string.Equals(log, SecurityLog, StringComparison.OrdinalIgnoreCase);
+
                 progress?.Report($"Reading {ShortName(log)} log…");
                 try
                 {
                     var events = new List<AnalyzedEvent>();
+                    int read = 0;
+                    DateTime? oldest = null;
                     foreach (AnalyzedEvent ev in _source.Read(log, plan.Value?.ToList(), input.FromUtc, ct))
                     {
-                        events.Add(ev);
-                        if (events.Count % 5000 == 0)
-                            progress?.Report($"Reading {ShortName(log)} log… {events.Count:N0} events");
+                        read++;
+                        if (isSecurity && (!oldest.HasValue || ev.TimeUtc < oldest.Value))
+                            oldest = ev.TimeUtc;
+                        foreach (RuleMatcher matcher in logMatchers)
+                        {
+                            System.Net.IPAddress ip = matcher.Match(ev.Xml);
+                            if (ip != null)
+                                hits.Add(new RuleHit(matcher.Rule.TaskName, ip, ev.TimeUtc));
+                        }
+                        if (keepIds.Contains(ev.EventId))
+                        {
+                            ev.DropXml();
+                            events.Add(ev);
+                        }
+                        if (read % 5000 == 0)
+                            progress?.Report($"Reading {ShortName(log)} log… {read:N0} events");
                     }
                     eventsByLog[log] = events;
                     result.LogsChecked.Add(log);
-                    result.EventsRead += events.Count;
+                    result.EventsRead += read;
+                    result.EventsKept += events.Count;
+                    if (isSecurity)
+                    {
+                        input.SecurityLogRead = true;
+                        input.SecurityOldestUtc = oldest;
+                    }
                 }
                 catch (UnauthorizedAccessException)
                 {
@@ -83,9 +113,10 @@ namespace EvlWatcherConsole.Analysis
             var findings = new List<Finding>();
             if (input.Rules == null)
                 result.Notice = "The EvlWatcher service isn't responding, so attacks couldn't be checked against your rules.";
-            findings.AddRange(AttackChecks.Run(eventsByLog, input));
-            findings.AddRange(SecurityChecks.Run(eventsByLog, input));
-            findings.AddRange(HealthChecks.Run(eventsByLog, input));
+            findings.AddRange(AttackChecks.Run(hits, eventsByLog, input, ct));
+            findings.AddRange(SecurityChecks.Run(eventsByLog, input, ct));
+            findings.AddRange(HealthChecks.Run(eventsByLog, input, ct));
+            ct.ThrowIfCancellationRequested();
 
             result.Findings = findings.OrderByDescending(f => f.Severity).ThenByDescending(f => f.LastSeenUtc).ToList();
             result.BanAllAction = AttackChecks.BuildBanAll(result.Findings);
@@ -135,6 +166,20 @@ namespace EvlWatcherConsole.Analysis
             Want(RdpCoreLog, new[] { 131 });
 
             return order.Select(log => new KeyValuePair<string, HashSet<int>>(log, plan[log])).ToList();
+        }
+
+        /// <summary>The event IDs the security and health checks need from a log (the rest of a rule log is not kept).</summary>
+        private static HashSet<int> FixedIds(string log)
+        {
+            if (string.Equals(log, SecurityLog, StringComparison.OrdinalIgnoreCase))
+                return new HashSet<int>(SecurityChecks.SecurityEventIds.Concat(HealthChecks.SecurityEventIds));
+            if (string.Equals(log, SystemLog, StringComparison.OrdinalIgnoreCase))
+                return new HashSet<int>(SecurityChecks.SystemEventIds.Concat(HealthChecks.SystemEventIds));
+            if (string.Equals(log, ApplicationLog, StringComparison.OrdinalIgnoreCase))
+                return new HashSet<int>(HealthChecks.ApplicationEventIds);
+            if (string.Equals(log, RdpCoreLog, StringComparison.OrdinalIgnoreCase))
+                return new HashSet<int> { 131 };
+            return new HashSet<int>();
         }
 
         private static string ShortName(string log)

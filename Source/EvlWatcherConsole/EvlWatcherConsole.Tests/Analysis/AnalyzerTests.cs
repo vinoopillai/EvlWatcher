@@ -166,6 +166,35 @@ namespace EvlWatcherConsole.Tests.Analysis
         }
 
         [TestMethod]
+        public void RuleLogEventsAreNotKeptUnlessNeeded()
+        {
+            // a rule log is read in full, but only rule hits and the IDs other checks need may stay in memory
+            DateTime t = Now.AddHours(-6);
+            var source = new FakeEventSource()
+                .Add(Enumerable.Range(0, 100).Select(i => EventSamples.Other("Security", "Microsoft-Windows-Security-Auditing", 5156, t.AddSeconds(i))).ToArray())
+                .Add(Enumerable.Range(0, 7).Select(i => EventSamples.Failed4625("5.175.140.23", t.AddMinutes(i * 24))).ToArray());
+
+            AnalysisResult result = Analyze(source, Input(Rule("R", "Security")));
+
+            Assert.AreEqual(107, result.EventsRead);
+            Assert.AreEqual(7, result.EventsKept);
+            Assert.AreEqual("5.175.140.23", result.Findings.Single(f => f.Category == FindingCategory.Attack).Address);
+        }
+
+        [TestMethod]
+        public void SecurityStateIsPassedToChecks()
+        {
+            DateTime t = Now.AddHours(-2);
+            var source = new FakeEventSource()
+                .Add(EventSamples.Failed4625("5.175.140.23", t))
+                .Add(Enumerable.Range(0, 60).Select(i => EventSamples.RdpConnection131("203.0.113.9:51234", t.AddSeconds(i * 10))).ToArray());
+            source.Unreadable.Add("Security");
+
+            AnalysisResult result = Analyze(source, Input(Rule("R", "Security")));
+            Assert.IsFalse(result.Findings.Any(f => f.Category == FindingCategory.Attack), "no flood verdict without the Security log");
+        }
+
+        [TestMethod]
         public void EventsOutsideTheRangeAreIgnored()
         {
             var source = new FakeEventSource().Add(EventSamples.Disk7(Now.AddDays(-2)));

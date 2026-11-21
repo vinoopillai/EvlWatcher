@@ -50,6 +50,27 @@ namespace EvlWatcherConsole.Analysis
             return key != null && Data.TryGetValue(key, out string value) ? value : null;
         }
 
+        /// <summary>Like <see cref="FromXml"/>, but returns false for a record whose XML can't be parsed.</summary>
+        public static bool TryFromXml(string logName, string xml, out AnalyzedEvent ev)
+        {
+            try
+            {
+                ev = FromXml(logName, xml);
+                return true;
+            }
+            catch (System.Xml.XmlException)
+            {
+                ev = null;
+                return false;
+            }
+        }
+
+        /// <summary>Frees the raw XML once rule matching is done; the parsed fields stay.</summary>
+        public void DropXml()
+        {
+            Xml = null;
+        }
+
         public static AnalyzedEvent FromXml(string logName, string xml)
         {
             XElement root = XDocument.Parse(xml).Root;

@@ -208,6 +208,7 @@ namespace EvlWatcherConsole.ViewModel
                 input.WhitelistPatterns = _client.GetWhiteListPatterns();
                 input.TemporarilyBanned = new HashSet<string>(_client.GetTemporarilyBannedIPs());
                 input.PermanentlyBanned = new HashSet<string>(_client.GetPermanentlyBannedIPs());
+                input.CheckIntervalSeconds = _client.GetCheckIntervalSeconds();
             }
             catch (RuleClientException)
             {

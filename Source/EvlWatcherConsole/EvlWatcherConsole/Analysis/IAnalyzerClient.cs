@@ -22,6 +22,9 @@ namespace EvlWatcherConsole.Analysis
 
         /// <summary>Saves an existing rule.</summary>
         void SaveRule(GenericIPBlockingTaskDTO rule);
+
+        /// <summary>The service's scan interval in seconds (the window of rules that only check new events).</summary>
+        int GetCheckIntervalSeconds();
     }
 
     /// <summary>Asks the admin before an action changes anything.</summary>
