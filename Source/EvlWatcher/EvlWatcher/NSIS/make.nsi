@@ -21,7 +21,7 @@ Name "EvlWatcher"
 
 ; The file to write
 Icon EvlWatcher.ico
-OutFile "EvlWatcher-v3.1.0-setup.exe"
+OutFile "EvlWatcher-v3.2.0-setup.exe"
 
 ; The default installation directory
 InstallDir $PROGRAMFILES\EvlWatcher

@@ -1,0 +1,9 @@
+### 2026-11 release of v3.2.0
+- new "Analyzer" tab in the console. Pick Last 24 hours, Last 7 days or Last 30 days and click Scan; the console reads this server's event logs (it can be cancelled) and lists what it finds, most serious first:
+  - attacks: addresses that tried to log on and are not banned, including slow attackers that stay under a rule's window, and Remote Desktop connection floods.
+    Buttons: "Ban permanently", "Ban all unbanned attackers" and "Widen rule window" (to 1, 6 or 24 hours; it also raises the rule's ban length to match, so a banned address isn't banned again the moment its ban lifts).
+    Every button asks for confirmation and says exactly what will change. Whitelisted, local and private addresses are never offered for banning.
+  - security changes: a successful logon from an address that failed before (possible break-in), the Security log being cleared, new services, new users, accounts added to Administrators / Remote Desktop Users, account lockouts and new scheduled tasks.
+  - server health: disk and file-system errors, blue screens, unexpected restarts, low memory, low disk space, a full Security log (EvlWatcher can't see attacks then), crashing services and programs, SQL Server slow-disk / memory warnings and failed Windows Updates.
+- the scan runs in the console, so the EvlWatcher service needs no update for it. The console must run as administrator to read the Security log (it does by default).
+- nothing else changed: upgrades keep your config.xml, and the requirements are the same as v3.1.0 (Windows 8.1 / Server 2012 or later with .NET Framework 4.7.2).
