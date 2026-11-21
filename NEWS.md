@@ -1,5 +1,16 @@
 ## NEWS 
 
+### 2026-11-21 preparing the release of v3.3.0
+- new per-rule option "Only allow addresses from: IN" (any country codes): a failed attempt from another country is banned on the first try instead of after the rule's limit
+- these country bans are temporary and never become permanent on their own; addresses from the allowed countries keep the rule's normal limits
+- country data comes from the five internet registries, ships with the installer and is refreshed weekly by the service (status and "Update now" on the Settings tab)
+
+### 2026-11-21 preparing the release of v3.2.0
+- new "Analyzer" tab: scans this server's event logs for the last 24 hours, 7 days or 30 days and lists risks in plain language
+- finds attackers that weren't banned (including slow ones that stay under a rule's window) and offers one-click "Ban permanently", "Ban all" and "Widen rule window" after a confirmation
+- flags possible break-ins (a successful logon after failed attempts), a cleared Security log, new services, users and admin-group members, and account lockouts
+- flags server problems that slow or break the server: disk and file-system errors, crashes, unexpected restarts, low memory or disk space, a full Security log
+
 ### 2026-11-19 preparing the release of v3.1.0
 - the console no longer needs the .NET 10 Desktop Runtime: it runs on .NET Framework 4.7.2, like the service, which is built into Windows 10 1803+, 11 and Server 2019+
 - supported on Windows 8.1 / Server 2012 and later (32- or 64-bit); Windows 7 / Server 2008 R2 will follow once tested

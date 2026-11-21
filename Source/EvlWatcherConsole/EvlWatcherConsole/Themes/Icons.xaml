@@ -21,6 +21,7 @@
     <Geometry x:Key="CancelIcon">M 3.5,3.5 L 12.5,12.5 M 12.5,3.5 L 3.5,12.5</Geometry>
     <Geometry x:Key="LockIcon">M 3.5,7.5 L 12.5,7.5 L 12.5,14 L 3.5,14 Z M 5.5,7.5 L 5.5,5 A 2.5,2.5 0 0 1 10.5,5 L 10.5,7.5</Geometry>
     <Geometry x:Key="UnlockIcon">M 3.5,7.5 L 12.5,7.5 L 12.5,14 L 3.5,14 Z M 5.5,7.5 L 5.5,5 A 2.5,2.5 0 0 1 10.3,4</Geometry>
+    <Geometry x:Key="AnalyzeIcon">M 2,6.5 A 4.5,4.5 0 1 1 11,6.5 A 4.5,4.5 0 1 1 2,6.5 Z M 9.8,9.8 L 14,14</Geometry>
 
     <!--
       A 16x16 icon. Stretch is None so every icon keeps its size on the shared grid; scale with a LayoutTransform.

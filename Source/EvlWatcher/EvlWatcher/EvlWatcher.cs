@@ -78,11 +78,21 @@ namespace EvlWatcher
         #region public constructor
 
         public EvlWatcher(ILogger logger, IPersistentServiceConfiguration configuration, IGenericTaskFactory genericTaskFactory)
+            : this(logger, configuration, genericTaskFactory, null)
+        {
+        }
+
+        internal EvlWatcher(ILogger logger, IPersistentServiceConfiguration configuration, IGenericTaskFactory genericTaskFactory, Geo.CountryDataService countryData)
         {
             _logger = logger;
             _serviceconfiguration = configuration;
             _genericTaskFactory = genericTaskFactory;
+            _countryData = countryData;
         }
+
+        /// <summary>Country data for rules with allowed countries; null when not wired (tests).</summary>
+        private readonly Geo.CountryDataService _countryData;
+        private bool? _appliedCountryAutoUpdate;
 
         #endregion
 
@@ -189,6 +199,47 @@ namespace EvlWatcher
             {
                 if (wrote)
                     RequestReload();
+            }
+        }
+
+        public CountryDataStatusDTO GetCountryDataStatus()
+        {
+            EnsureClientPrivileges();
+
+            Geo.CountryDataStatus status = _countryData?.GetStatus() ?? new Geo.CountryDataStatus();
+            return new CountryDataStatusDTO
+            {
+                Loaded = status.Loaded,
+                UpdatedUtc = status.UpdatedUtc,
+                RangeCount = status.RangeCount,
+                LastError = status.LastError,
+                Registries = status.Registries.ToArray(),
+                AutoUpdate = _serviceconfiguration.CountryDataAutoUpdate
+            };
+        }
+
+        public void UpdateCountryDataNow()
+        {
+            EnsureClientPrivileges();
+
+            if (_countryData == null)
+                throw InvalidRuleFault("Country data isn't available in this service.");
+            _logger.Dump("Country data update requested from the console", SeverityLevel.Info);
+            _countryData.UpdateNowAsync();
+        }
+
+        public void SetCountryDataAutoUpdate(bool enabled)
+        {
+            EnsureClientPrivileges();
+
+            lock (_syncObject)
+            {
+                _serviceconfiguration.CountryDataAutoUpdate = enabled;
+                if (_countryData != null)
+                {
+                    _appliedCountryAutoUpdate = enabled;
+                    _countryData.SetAutoUpdate(enabled);
+                }
             }
         }
 
@@ -510,6 +561,13 @@ namespace EvlWatcher
 
                 //reload configuration in case of external changes
                 _serviceconfiguration.Load();
+
+                //country data refresh follows <CountryDataAutoUpdate>; only touch the timer when the setting changed
+                if (_countryData != null && _appliedCountryAutoUpdate != _serviceconfiguration.CountryDataAutoUpdate)
+                {
+                    _appliedCountryAutoUpdate = _serviceconfiguration.CountryDataAutoUpdate;
+                    _countryData.SetAutoUpdate(_appliedCountryAutoUpdate.Value);
+                }
 
                 //create generic tasks from configuration
                 List<LogTask> newTasks = InitWorkersFromConfig(_serviceconfiguration.TaskConfigurations);
@@ -844,16 +902,29 @@ namespace EvlWatcher
             //build dependencies
             ILogger logger = new DefaultLogger();
             IPersistentServiceConfiguration serviceConfiguration = new XmlServiceConfiguration(logger);
-            IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger);
+
+            // country data lives next to config.xml in geo\ (installer copy, refreshed weekly from the registries)
+            string geoFolder = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(ConfigFile.Path), "geo");
+            var countryData = new Geo.CountryDataService(geoFolder, new Geo.HttpRegistryDownloader(), logger, () => DateTime.UtcNow);
+            try
+            {
+                countryData.Start(false); // the weekly refresh follows <CountryDataAutoUpdate> once config.xml is loaded
+            }
+            catch (Exception e)
+            {
+                // broken country data must never keep the service from starting: rules then use their normal limits
+                logger.Dump(e, SeverityLevel.Warning);
+            }
+            IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger, countryData);
 
             if (!Environment.UserInteractive)
             {
-                Run(new EvlWatcher(logger, serviceConfiguration, genericTaskFactory));
+                Run(new EvlWatcher(logger, serviceConfiguration, genericTaskFactory, countryData));
             }
             else
             {
                 //debug
-                EvlWatcher w = new EvlWatcher(logger, serviceConfiguration, genericTaskFactory);
+                EvlWatcher w = new EvlWatcher(logger, serviceConfiguration, genericTaskFactory, countryData);
                 w.OnStart(null);
                 Thread.Sleep(60000000);
                 w.OnStop();

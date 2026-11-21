@@ -8,7 +8,7 @@ using System.ServiceModel;
 
 namespace EvlWatcherConsole.Model
 {
-    public class EvlWatcherModel : EvlWatcherConsole.Rules.IRuleClient
+    public class EvlWatcherModel : EvlWatcherConsole.Rules.IRuleClient, EvlWatcherConsole.Analysis.IAnalyzerClient
     {
         #region private members
 
@@ -141,6 +141,71 @@ namespace EvlWatcherConsole.Model
         void EvlWatcherConsole.Rules.IRuleClient.SetRuleActive(string name, bool active)
         {
             CallRuleService(() => Call(s => s.SetRuleActive(name, active)));
+        }
+
+        CountryDataStatusDTO EvlWatcherConsole.Rules.IRuleClient.GetCountryDataStatus()
+        {
+            CountryDataStatusDTO status = null;
+            CallRuleService(() => status = Call(s => s.GetCountryDataStatus()));
+            return status ?? new CountryDataStatusDTO();
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.UpdateCountryDataNow()
+        {
+            CallRuleService(() => Call(s => s.UpdateCountryDataNow()));
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.SetCountryDataAutoUpdate(bool enabled)
+        {
+            CallRuleService(() => Call(s => s.SetCountryDataAutoUpdate(enabled)));
+        }
+
+        #endregion
+
+        #region IAnalyzerClient
+
+        IList<GenericIPBlockingTaskDTO> EvlWatcherConsole.Analysis.IAnalyzerClient.GetRules()
+        {
+            return ((EvlWatcherConsole.Rules.IRuleClient)this).GetRules();
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetWhiteListPatterns()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetWhiteListEntries()));
+            return result ?? new string[0];
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetTemporarilyBannedIPs()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetTemporarilyBannedIPs()));
+            return result ?? new string[0];
+        }
+
+        IList<string> EvlWatcherConsole.Analysis.IAnalyzerClient.GetPermanentlyBannedIPs()
+        {
+            string[] result = null;
+            CallRuleService(() => result = Call(s => s.GetPermanentlyBannedIPs()));
+            return result ?? new string[0];
+        }
+
+        void EvlWatcherConsole.Analysis.IAnalyzerClient.BanPermanently(IList<string> addresses)
+        {
+            string[] list = addresses.ToArray();
+            CallRuleService(() => Call(s => s.SetPermanentBans(list)));
+        }
+
+        void EvlWatcherConsole.Analysis.IAnalyzerClient.SaveRule(GenericIPBlockingTaskDTO rule)
+        {
+            CallRuleService(() => Call(s => s.SaveRule(rule, false)));
+        }
+
+        int EvlWatcherConsole.Analysis.IAnalyzerClient.GetCheckIntervalSeconds()
+        {
+            int seconds = 30;
+            CallRuleService(() => seconds = Call(s => s.GetGlobalConfig()).EventLogInterval);
+            return seconds > 0 ? seconds : 30;
         }
 
         private static void CallRuleService(Action call)

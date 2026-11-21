@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EvlWatcherConsole.ViewModel"
         xmlns:view="clr-namespace:EvlWatcherConsole.View"
-        Title="EvlWatcher v3.1.0 Console"
+        Title="EvlWatcher v3.3.0 Console"
         Height="720" Width="1040" MinHeight="600" MinWidth="880"
         Icon="pack://application:,,,/Resources/EvlWatcher.ico"
         Background="{DynamicResource WindowBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -244,6 +244,19 @@
             </TabItem>
 
             <!-- ============================================================ -->
+            <!-- Analyzer                                                      -->
+            <!-- ============================================================ -->
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource AnalyzeIcon}" Margin="0,0,8,0" />
+                        <TextBlock Text="Analyzer" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+                <view:AnalyzerView DataContext="{Binding Analyzer}" />
+            </TabItem>
+
+            <!-- ============================================================ -->
             <!-- Settings                                                      -->
             <!-- ============================================================ -->
             <TabItem IsSelected="{Binding IsGlobalConfigSelected, Mode=OneWayToSource}">
@@ -314,6 +327,23 @@
                                 </Button>
                             </StackPanel>
                         </StackPanel>
+
+                        <!-- Country data for the rules' "Only allow addresses from" option -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" DataContext="{Binding CountryData}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardTitleStyle}" Text="Country data" />
+                                <TextBlock TextWrapping="Wrap" Text="{Binding StatusText}" />
+                                <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,4,0,8"
+                                           Text="Used by rules that only allow some countries. Comes from the five internet registries (APNIC, RIPE NCC, ARIN, LACNIC, AFRINIC)." />
+                                <DockPanel LastChildFill="False">
+                                    <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" IsChecked="{Binding AutoUpdate}"
+                                              Content="Update weekly from the internet registries" />
+                                    <Button DockPanel.Dock="Right" Content="Update now" MinWidth="96" Command="{Binding UpdateNowCommand}"
+                                            ToolTip="Download the latest country data now (runs in the background)" />
+                                </DockPanel>
+                                <TextBlock Style="{StaticResource ErrorTextStyle}" Text="{Binding Error}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

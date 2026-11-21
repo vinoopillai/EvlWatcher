@@ -19,6 +19,7 @@
     <SolidColorBrush x:Key="AccentFillColorDisabledBrush" Color="#BFC9D4" />
     <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="#1A7F37" />
     <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#CF222E" />
+    <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#9A6700" />
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E1E4E8" />
     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FFFFFF" />

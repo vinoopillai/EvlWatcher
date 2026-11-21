@@ -32,6 +32,19 @@ namespace EvlWatcher.Config
                 foreach (var regexBoosterNode in taskConfig.Element("RegexBoosters").Descendants("Booster"))
                     newTask.AddRegexBooster(regexBoosterNode.Value);
 
+                XElement countries = taskConfig.Element("AllowedCountries");
+                if (countries != null)
+                {
+                    // hand edits: accept , ; and spaces; any invalid entry turns the filter off for this rule (a typo must
+                    // never give every user of the intended country a first-attempt ban)
+                    List<string> codes = NormalizeCountries(countries.Value.Split(new[] { ',', ';', ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                    bool invalid = codes.Any(c => c.Length != 2 || !c.All(ch => ch >= 'A' && ch <= 'Z'));
+                    if (invalid)
+                        logger.Dump($"Rule {newTask.TaskName}: <AllowedCountries> \"{countries.Value.Trim()}\" contains invalid country codes; the country filter is OFF for this rule until they are fixed (two letters, e.g. IN).", SeverityLevel.Warning);
+                    else
+                        newTask._allowedCountries.AddRange(codes);
+                }
+
 
                 return newTask;
             }
@@ -46,6 +59,7 @@ namespace EvlWatcher.Config
         #region private members
 
         private readonly List<string> _regexBoosters = new List<string>();
+        private readonly List<string> _allowedCountries = new List<string>();
         private static bool _isLoading = false;
         private readonly object _syncObject;
         private ILogger _logger;
@@ -312,6 +326,49 @@ namespace EvlWatcher.Config
                 _regexBoosters.AddRange(list);
             }
         }
+
+        public IList<string> AllowedCountries
+        {
+            get
+            {
+                lock (_syncObject)
+                    return _allowedCountries.ToList();
+            }
+        }
+
+        public void SetAllowedCountries(IEnumerable<string> countries)
+        {
+            lock (_syncObject)
+            {
+                List<string> list = NormalizeCountries(countries ?? new string[0]);
+                _logger.Dump($"Writing task config for task {TaskName}: allowed countries = {string.Join(",", list)}", SeverityLevel.Verbose);
+
+                XDocument d = XDocument.Load(ConfigFile.Path);
+                XElement taskEl = FindTaskElement(d);
+                XElement el = taskEl.Element("AllowedCountries");
+                if (list.Count == 0)
+                {
+                    el?.Remove();
+                }
+                else
+                {
+                    if (el == null)
+                    {
+                        el = new XElement("AllowedCountries");
+                        taskEl.Add(el);
+                    }
+                    el.Value = string.Join(",", list);
+                }
+                ConfigFile.Save(d);
+
+                _allowedCountries.Clear();
+                _allowedCountries.AddRange(list);
+            }
+        }
+
+        /// <summary>Trimmed, upper case, distinct, without empty entries.</summary>
+        internal static List<string> NormalizeCountries(IEnumerable<string> countries) =>
+            countries.Select(c => (c ?? "").Trim().ToUpperInvariant()).Where(c => c.Length > 0).Distinct().ToList();
 
         public bool RemoveRegexBooster(string regexBooster)
         {

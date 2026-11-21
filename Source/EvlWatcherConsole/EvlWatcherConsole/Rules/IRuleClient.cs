@@ -14,6 +14,14 @@ namespace EvlWatcherConsole.Rules
         void SaveRule(GenericIPBlockingTaskDTO rule, bool isNew);
 
         void SetRuleActive(string name, bool active);
+
+        /// <summary>State of the service's country data (used by the rules' country option and the Settings tab).</summary>
+        CountryDataStatusDTO GetCountryDataStatus();
+
+        /// <summary>Starts a refresh of the country data in the service; returns at once.</summary>
+        void UpdateCountryDataNow();
+
+        void SetCountryDataAutoUpdate(bool enabled);
     }
 
     /// <summary>

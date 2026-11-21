@@ -34,6 +34,9 @@ namespace EvlWatcherConsole.ViewModel
         private string _regex;
         private bool _onlyNewEvents;
         private string _saveError;
+        private bool _restrictCountries;
+        private string _allowedCountriesText = "";
+        private bool _countryDataUnavailable;
 
         #endregion
 
@@ -84,6 +87,7 @@ namespace EvlWatcherConsole.ViewModel
                 RegexBoosters = new List<string>(r.RegexBoosters ?? new List<string>()),
                 MissingEventLogs = new List<string>(r.MissingEventLogs ?? new List<string>()),
                 Regex = r.Regex,
+                AllowedCountries = new List<string>(r.AllowedCountries ?? new List<string>()),
             };
         }
 
@@ -117,6 +121,8 @@ namespace EvlWatcherConsole.ViewModel
             _boostersText = Join(r.RegexBoosters);
             _regex = r.Regex;
             _onlyNewEvents = r.OnlyNewEvents;
+            _restrictCountries = (r.AllowedCountries ?? new List<string>()).Count > 0;
+            _allowedCountriesText = string.Join(", ", r.AllowedCountries ?? new List<string>());
             _saveError = null;
         }
 
@@ -147,6 +153,9 @@ namespace EvlWatcherConsole.ViewModel
                 return "The ban duration must be a number of minutes, 1 or more.";
             if (!_neverPermanent && (!TryParseWhole(_permanentAfterText, out int perma) || perma < 1))
                 return "Permanent ban count must be a whole number, 1 or more.";
+            string countryError = CountryError;
+            if (countryError.Length > 0)
+                return countryError;
             return null;
         }
 
@@ -171,6 +180,7 @@ namespace EvlWatcherConsole.ViewModel
                 MissingEventLogs = new List<string>(_original.MissingEventLogs ?? new List<string>()),
                 Regex = _regex,
                 OnlyNewEvents = _onlyNewEvents,
+                AllowedCountries = _restrictCountries ? CountryCodes.Parse(_allowedCountriesText) : new List<string>(),
             };
         }
 
@@ -220,7 +230,7 @@ namespace EvlWatcherConsole.ViewModel
                 nameof(WindowMinutesText), nameof(BanMinutesText), nameof(PermanentAfterText), nameof(NeverPermanent),
                 nameof(EventLogsText), nameof(BoostersText), nameof(Regex), nameof(OnlyNewEvents),
                 nameof(IsDirty), nameof(FieldError), nameof(SaveError), nameof(IsNameEditable), nameof(IsDimmed),
-                nameof(Subtitle) })
+                nameof(Subtitle), nameof(RestrictCountries), nameof(AllowedCountriesText), nameof(CountryNamesText), nameof(CountryError) })
                 Notify(p);
             Dirtied?.Invoke();
         }
@@ -372,9 +382,92 @@ namespace EvlWatcherConsole.ViewModel
                     || _eventLogsText != Join(o.EventPath)
                     || _boostersText != Join(o.RegexBoosters)
                     || _regex != o.Regex
-                    || _onlyNewEvents != o.OnlyNewEvents;
+                    || _onlyNewEvents != o.OnlyNewEvents
+                    || _restrictCountries != ((o.AllowedCountries ?? new List<string>()).Count > 0)
+                    || (_restrictCountries && string.Join(",", CountryCodes.Parse(_allowedCountriesText)) != string.Join(",", o.AllowedCountries ?? new List<string>()));
             }
         }
+
+        #region country option
+
+        public const string CountryNoteText =
+            "Addresses are judged by the country they are registered in. Users on cloud servers, VPNs or abroad may get a " +
+            "temporary ban — add their addresses to the whitelist. Country bans are temporary and never become permanent on their own.";
+
+        /// <summary>The wizard (a new rule) doesn't offer the option; it's available once the rule exists.</summary>
+        public bool ShowCountryOption { get { return !_isNew; } }
+
+        /// <summary>"Only allow addresses from …" ticked.</summary>
+        public bool RestrictCountries
+        {
+            get { return _restrictCountries; }
+            set
+            {
+                if (_restrictCountries == value) return;
+                _restrictCountries = value;
+                Changed(nameof(RestrictCountries));
+                Notify(nameof(CountryNamesText));
+                Notify(nameof(CountryError));
+            }
+        }
+
+        /// <summary>Codes as typed, e.g. "IN, AE".</summary>
+        public string AllowedCountriesText
+        {
+            get { return _allowedCountriesText; }
+            set
+            {
+                if (_allowedCountriesText == value) return;
+                _allowedCountriesText = value ?? "";
+                Changed(nameof(AllowedCountriesText));
+                Notify(nameof(CountryNamesText));
+                Notify(nameof(CountryError));
+            }
+        }
+
+        /// <summary>English names of the known codes, e.g. "India, United Arab Emirates".</summary>
+        public string CountryNamesText
+        {
+            get
+            {
+                var names = new List<string>();
+                foreach (string code in CountryCodes.Parse(_allowedCountriesText))
+                    if (CountryCodes.TryGetName(code, out string name))
+                        names.Add(name);
+                return string.Join(", ", names);
+            }
+        }
+
+        /// <summary>Why the countries can't be saved, or "" when they can (or the option is off).</summary>
+        public string CountryError
+        {
+            get
+            {
+                if (!_restrictCountries)
+                    return "";
+                List<string> codes = CountryCodes.Parse(_allowedCountriesText);
+                if (codes.Count == 0)
+                    return "Enter at least one country code, e.g. IN.";
+                string unknown = codes.FirstOrDefault(c => !CountryCodes.TryGetName(c, out _));
+                return unknown == null ? "" : "Unknown country code: " + unknown;
+            }
+        }
+
+        public string CountryNote { get { return CountryNoteText; } }
+
+        /// <summary>Set by the list when the service has no country data: the rule then uses its normal limit for everyone.</summary>
+        public bool CountryDataUnavailable
+        {
+            get { return _countryDataUnavailable; }
+            set
+            {
+                if (_countryDataUnavailable == value) return;
+                _countryDataUnavailable = value;
+                Notify(nameof(CountryDataUnavailable));
+            }
+        }
+
+        #endregion
 
         /// <summary>Validation message for the current input, or null when it can be saved.</summary>
         public string FieldError { get { return Validate(); } }
@@ -395,7 +488,8 @@ namespace EvlWatcherConsole.ViewModel
                 && o.LockTime == r.LockTime && o.EventAge == r.EventAge && o.TriggerCount == r.TriggerCount
                 && o.PermaBanCount == r.PermaBanCount && o.OnlyNewEvents == r.OnlyNewEvents && o.Regex == r.Regex
                 && Join(o.EventPath) == Join(r.EventPath) && Join(o.RegexBoosters) == Join(r.RegexBoosters)
-                && Join(o.MissingEventLogs) == Join(r.MissingEventLogs);
+                && Join(o.MissingEventLogs) == Join(r.MissingEventLogs)
+                && Join(o.AllowedCountries) == Join(r.AllowedCountries);
         }
 
         #endregion

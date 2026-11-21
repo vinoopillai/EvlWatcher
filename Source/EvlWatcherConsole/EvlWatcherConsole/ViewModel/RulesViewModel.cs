@@ -23,6 +23,7 @@ namespace EvlWatcherConsole.ViewModel
         private NewRuleWizardViewModel _wizard;
         private string _lastFetchError;
         private bool _hasFetched;
+        private volatile bool _countryDataLoaded = true;
         private bool _serviceResponding = true;
 
         #endregion
@@ -144,7 +145,16 @@ namespace EvlWatcherConsole.ViewModel
             try
             {
                 error = null;
-                return _client.GetRules();
+                IList<GenericIPBlockingTaskDTO> rules = _client.GetRules();
+                try
+                {
+                    _countryDataLoaded = _client.GetCountryDataStatus()?.Loaded ?? false;
+                }
+                catch (RuleClientException)
+                {
+                    _countryDataLoaded = false; // an older service without country data, or a hiccup: show the hint
+                }
+                return rules;
             }
             catch (RuleClientException ex)
             {
@@ -193,6 +203,9 @@ namespace EvlWatcherConsole.ViewModel
                 foreach (var editor in fresh)
                     Rules.Add(editor);
             }
+
+            foreach (var editor in Rules)
+                editor.CountryDataUnavailable = !_countryDataLoaded;
 
             Selected = Rules.FirstOrDefault(r => r.Name == selectedName);
             Notify(nameof(IsBusyEditing));

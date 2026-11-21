@@ -31,7 +31,8 @@ namespace EvlWatcher.Config
                 EventPath = paths,
                 MissingEventLogs = paths.Where(p => !eventLogExists(p)).ToList(),
                 RegexBoosters = c.RegexBoosters.ToList(),
-                Regex = c.Regex
+                Regex = c.Regex,
+                AllowedCountries = (c.AllowedCountries ?? new List<string>()).ToList()
             };
         }
 
@@ -49,6 +50,9 @@ namespace EvlWatcher.Config
             target.EventPath = string.Join(",", (dto.EventPath ?? new List<string>()).Select(p => p.Trim()));
             target.Regex = dto.Regex;
             target.SetRegexBoosters(dto.RegexBoosters ?? new List<string>());
+            // null = sent by an older console that doesn't know the field: keep the rule's current countries
+            if (dto.AllowedCountries != null)
+                target.SetAllowedCountries(XmlTaskConfig.NormalizeCountries(dto.AllowedCountries));
             // Active goes last: a rule that fails midway must never end up enabled but half-written.
             target.Active = dto.Active;
         }

@@ -5,6 +5,8 @@
 ;   EvlWatcherConsole.exe, EvlWatcherConsole.exe.config
 ;       -> from Source\EvlWatcherConsole\EvlWatcherConsole\bin\Release\net472\
 ;          dotnet build Source\EvlWatcherConsole\EvlWatcherConsole.sln -c Release
+;   geo\delegated-*.txt (the five internet registries' country data)
+;       -> powershell -ExecutionPolicy Bypass -File fetch-geo.ps1   (run in the folder you compile in)
 ;
 ; Supported targets: Windows 8.1 / Server 2012 and later (32- or 64-bit) with Desktop Experience.
 ; Service and console need .NET Framework 4.7.2 (built into Windows 10 1803+, 11 and Server 2019+).
@@ -21,7 +23,7 @@ Name "EvlWatcher"
 
 ; The file to write
 Icon EvlWatcher.ico
-OutFile "EvlWatcher-v3.1.0-setup.exe"
+OutFile "EvlWatcher-v3.3.0-setup.exe"
 
 ; The default installation directory
 InstallDir $PROGRAMFILES\EvlWatcher
@@ -90,6 +92,14 @@ Section "EvlWatcher Service"
   File "/oname=config.default.xml" "config.xml"
   File "EvlWatcherConsole.exe"
   File "EvlWatcherConsole.exe.config"
+
+  ; Country data for rules with allowed countries (fallback copy; the service refreshes it weekly itself).
+  ; ifnewer: an upgrade never replaces data the service has already refreshed with this older snapshot.
+  SetOutPath $INSTDIR\geo
+  SetOverwrite ifnewer
+  File "geo\delegated-*.txt"
+  SetOverwrite on
+  SetOutPath $INSTDIR
 
   ; The service and the console both need .NET Framework 4.7.2 or later (Release >= 461808).
   ; Built into Windows 10 1803+, 11 and Server 2019+; older systems need it installed.
@@ -167,6 +177,7 @@ Section "Uninstall"
   Delete $INSTDIR\EvlWatcherConsole.exe
   Delete $INSTDIR\EvlWatcherConsole.exe.config
   Delete $INSTDIR\EvlWatcher.WCF.dll
+  RMDir /r "$INSTDIR\geo"
 
 
   Delete $INSTDIR\uninstall.exe

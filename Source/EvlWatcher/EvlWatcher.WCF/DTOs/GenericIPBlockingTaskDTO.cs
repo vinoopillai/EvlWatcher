@@ -65,6 +65,13 @@ namespace EvlWatcher.WCF.DTO
         /// </summary>
         public string Regex { get; set; }
 
+        /// <summary>
+        /// countries (ISO codes, e.g. "IN") whose addresses get the normal limit; any other known country is banned on its
+        /// first attempt (temporarily, without a strike). Empty = no country filter. Null = "not sent" (older console):
+        /// the service then keeps the rule's current value.
+        /// </summary>
+        public IList<string> AllowedCountries { get; set; }
+
         public override bool Equals(object obj)
         {
             return obj is GenericIPBlockingTaskDTO dTO &&

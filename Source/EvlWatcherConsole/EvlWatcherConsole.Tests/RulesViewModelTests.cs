@@ -33,6 +33,28 @@ namespace EvlWatcherConsole.Tests
             if (FailWith != null) throw new RuleClientException(FailWith);
             Toggled.Add((name, active));
         }
+
+        public CountryDataStatusDTO CountryStatus = new CountryDataStatusDTO { Loaded = true, Registries = new[] { "APNIC" } };
+        public int UpdateNowCalls;
+        public List<bool> AutoUpdateCalls = new List<bool>();
+
+        public CountryDataStatusDTO GetCountryDataStatus()
+        {
+            if (FailWith != null) throw new RuleClientException(FailWith);
+            return CountryStatus;
+        }
+
+        public void UpdateCountryDataNow()
+        {
+            if (FailWith != null) throw new RuleClientException(FailWith);
+            UpdateNowCalls++;
+        }
+
+        public void SetCountryDataAutoUpdate(bool enabled)
+        {
+            if (FailWith != null) throw new RuleClientException(FailWith);
+            AutoUpdateCalls.Add(enabled);
+        }
     }
 
     [TestClass]

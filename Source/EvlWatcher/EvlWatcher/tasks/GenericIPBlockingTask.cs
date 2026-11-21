@@ -1,5 +1,6 @@
 ﻿using EvlWatcher.Config;
 using EvlWatcher.DTOs;
+using EvlWatcher.Geo;
 using EvlWatcher.Logging;
 using System;
 using System.Collections.Generic;
@@ -15,8 +16,15 @@ namespace EvlWatcher.Tasks
 
         internal static GenericIPBlockingTask FromConfiguration(IPersistentTaskConfiguration configuration, ILogger logger)
         {
+            return FromConfiguration(configuration, logger, CountryDatabase.Empty);
+        }
+
+        internal static GenericIPBlockingTask FromConfiguration(IPersistentTaskConfiguration configuration, ILogger logger, ICountryLookup countries)
+        {
             GenericIPBlockingTask t = new GenericIPBlockingTask(logger)
             {
+                Countries = countries ?? CountryDatabase.Empty,
+                AllowedCountries = new HashSet<string>((configuration.AllowedCountries ?? new List<string>()).Select(c => c.Trim().ToUpperInvariant()).Where(c => c.Length > 0)),
                 Name = configuration.TaskName,
                 Description = configuration.Description,
                 LockTime = configuration.LockTime,
@@ -61,6 +69,11 @@ namespace EvlWatcher.Tasks
         public int PermaBanCount { get; set; } = 3;
         public int TriggerCount { get; set; } = 5;
         public Regex Regex { get; set; } = null;
+
+        /// <summary>Countries with the normal trigger count; other known countries are banned on their first attempt. Empty = off.</summary>
+        public ISet<string> AllowedCountries { get; set; } = new HashSet<string>();
+
+        internal ICountryLookup Countries { get; set; } = CountryDatabase.Empty;
 
         #endregion
 
@@ -204,7 +217,10 @@ namespace EvlWatcher.Tasks
 
                 foreach (KeyValuePair<IPAddress, int> kvp in sourceToCount)
                 {
-                    if (kvp.Value >= TriggerCount && !_blockedIPsToDate.ContainsKey(kvp.Key))
+                    if (_blockedIPsToDate.ContainsKey(kvp.Key))
+                        continue;
+
+                    if (kvp.Value >= TriggerCount)
                     {
                         _blockedIPsToDate.Add(kvp.Key, DateTime.Now);
                         if (!_bannedCount.ContainsKey(kvp.Key))
@@ -214,8 +230,54 @@ namespace EvlWatcher.Tasks
 
                         _logger.Dump($"Temporarily banning {kvp.Key}, this is strike {_bannedCount[kvp.Key]}", SeverityLevel.Info);
                     }
+                    else if (IsCountryBlocked(kvp.Key, out string country))
+                    {
+                        // first-attempt country ban: temporary only, never a strike towards a permanent ban
+                        _blockedIPsToDate.Add(kvp.Key, DateTime.Now);
+                        _logger.Dump($"{Name}: banning {kvp.Key} on first attempt (country {country}, rule allows only {string.Join(", ", AllowedCountries)})", SeverityLevel.Info);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// True when the rule allows only some countries, the country data is loaded, the address is public and not this
+        /// machine's, and its registered country is known and not allowed.
+        /// </summary>
+        private bool IsCountryBlocked(IPAddress ip, out string country)
+        {
+            country = null;
+            if (AllowedCountries.Count == 0 || !Countries.IsLoaded)
+                return false;
+            if (ip.IsIPv4MappedToIPv6)
+                ip = ip.MapToIPv4();
+            if (IsPrivateOrLocal(ip))
+                return false;
+            country = Countries.GetCountry(ip);
+            return country != null && !AllowedCountries.Contains(country);
+        }
+
+        private static readonly Lazy<HashSet<IPAddress>> OwnAddresses = new Lazy<HashSet<IPAddress>>(() =>
+        {
+            try
+            {
+                return new HashSet<IPAddress>(Dns.GetHostAddresses(Dns.GetHostName()));
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                return new HashSet<IPAddress>();
+            }
+        });
+
+        /// <summary>Loopback, unspecified, private (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7, fe80::/10) or this machine.</summary>
+        internal static bool IsPrivateOrLocal(IPAddress ip)
+        {
+            if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || OwnAddresses.Value.Contains(ip))
+                return true;
+            byte[] b = ip.GetAddressBytes();
+            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254);
+            return (b[0] & 0xFE) == 0xFC || (b[0] == 0xFE && (b[1] & 0xC0) == 0x80);
         }
 
         public override void Forget(IPAddress address)
