@@ -76,6 +76,17 @@ namespace EvlWatcher.Config
         void SetRegexBoosters(IEnumerable<string> boosters);
 
         /// <summary>
+        /// countries (upper-case ISO codes) whose addresses get the normal trigger count; any other known country is
+        /// banned on its first attempt. Empty = no country filter.
+        /// </summary>
+        IList<string> AllowedCountries { get; }
+
+        /// <summary>
+        /// replace the allowed countries (normalised to upper case; an empty list removes the filter)
+        /// </summary>
+        void SetAllowedCountries(IEnumerable<string> countries);
+
+        /// <summary>
         /// the regex used to extract an attackers IP address.
         /// </summary>
         string Regex { get; set; }

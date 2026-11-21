@@ -78,11 +78,20 @@ namespace EvlWatcher
         #region public constructor
 
         public EvlWatcher(ILogger logger, IPersistentServiceConfiguration configuration, IGenericTaskFactory genericTaskFactory)
+            : this(logger, configuration, genericTaskFactory, null)
+        {
+        }
+
+        internal EvlWatcher(ILogger logger, IPersistentServiceConfiguration configuration, IGenericTaskFactory genericTaskFactory, Geo.CountryDataService countryData)
         {
             _logger = logger;
             _serviceconfiguration = configuration;
             _genericTaskFactory = genericTaskFactory;
+            _countryData = countryData;
         }
+
+        /// <summary>Country data for rules with allowed countries; null when not wired (tests).</summary>
+        private readonly Geo.CountryDataService _countryData;
 
         #endregion
 
@@ -844,16 +853,21 @@ namespace EvlWatcher
             //build dependencies
             ILogger logger = new DefaultLogger();
             IPersistentServiceConfiguration serviceConfiguration = new XmlServiceConfiguration(logger);
-            IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger);
+
+            // country data lives next to config.xml in geo\ (installer copy, refreshed weekly from the registries)
+            string geoFolder = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(ConfigFile.Path), "geo");
+            var countryData = new Geo.CountryDataService(geoFolder, new Geo.HttpRegistryDownloader(), logger, () => DateTime.UtcNow);
+            countryData.Start(true);
+            IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger, countryData);
 
             if (!Environment.UserInteractive)
             {
-                Run(new EvlWatcher(logger, serviceConfiguration, genericTaskFactory));
+                Run(new EvlWatcher(logger, serviceConfiguration, genericTaskFactory, countryData));
             }
             else
             {
                 //debug
-                EvlWatcher w = new EvlWatcher(logger, serviceConfiguration, genericTaskFactory);
+                EvlWatcher w = new EvlWatcher(logger, serviceConfiguration, genericTaskFactory, countryData);
                 w.OnStart(null);
                 Thread.Sleep(60000000);
                 w.OnStop();
