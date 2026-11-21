@@ -1,5 +1,9 @@
 ## NEWS 
 
+### 2026-11-21 preparing the release of v3.4.0
+- Bans & Whitelist tab: one search box filters the temporary bans, permanent bans and whitelist as you type (e.g. 203.0.113 or 192.168)
+- status bar: the service's latest activity (e.g. "3 min ago: Temporarily banning 203.0.113.7") and the age of the IP country data, amber when it is missing or over 14 days old
+
 ### 2026-11-21 preparing the release of v3.3.0
 - new per-rule option "Only allow addresses from: IN" (any country codes): a failed attempt from another country is banned on the first try instead of after the rule's limit
 - these country bans are temporary and never become permanent on their own; addresses from the allowed countries keep the rule's normal limits

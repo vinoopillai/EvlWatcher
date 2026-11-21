@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EvlWatcherConsole.ViewModel"
         xmlns:view="clr-namespace:EvlWatcherConsole.View"
-        Title="EvlWatcher v3.3.0 Console"
+        Title="EvlWatcher v3.4.0 Console"
         Height="720" Width="1040" MinHeight="600" MinWidth="880"
         Icon="pack://application:,,,/Resources/EvlWatcher.ico"
         Background="{DynamicResource WindowBackgroundBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -63,7 +63,43 @@
                     </StackPanel>
                 </TabItem.Header>
 
-                <Grid Margin="0,16,0,12">
+                <DockPanel Margin="0,16,0,12">
+                <!-- Search across all three lists -->
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource AnalyzeIcon}" Margin="0,0,8,0"
+                          Stroke="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBox x:Name="IpSearchBox" Grid.Column="1" VerticalContentAlignment="Center"
+                             Text="{Binding IpSearch.Text, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Show only entries containing this text, e.g. 203.0.113 or 192.168"
+                             AutomationProperties.Name="Search the ban lists and whitelist" />
+                    <TextBlock Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                               Text="Search IPs and patterns…">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource HintTextStyle}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=IpSearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Tag="{StaticResource CancelIcon}"
+                            Command="{Binding IpSearch.ClearCommand}"
+                            Visibility="{Binding IpSearch.IsActive, Converter={StaticResource BoolToVisibility}}"
+                            ToolTip="Clear the search" AutomationProperties.Name="Clear the search" />
+                    <TextBlock Grid.Column="3" Margin="12,0,0,0" VerticalAlignment="Center" Style="{StaticResource HintTextStyle}"
+                               Text="{Binding IpSearch.Summary}" />
+                </Grid>
+
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition />
                         <ColumnDefinition Width="12" />
@@ -195,6 +231,7 @@
                         </Grid>
                     </Border>
                 </Grid>
+                </DockPanel>
             </TabItem>
 
             <!-- ============================================================ -->
@@ -448,6 +485,21 @@
 
         <!-- Status bar -->
         <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="16,8">
+            <DockPanel>
+            <!-- IP country data age (right) -->
+            <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center" Text="{Binding CountryDataText}"
+                       ToolTip="Age of the registries' IP-to-country data used by rules with allowed countries (Settings → Country data)">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CountryDataNeedsAttention}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <StackPanel Orientation="Horizontal">
                 <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0">
                     <Ellipse.Style>
@@ -474,6 +526,12 @@
                     </TextBlock.Style>
                 </TextBlock>
             </StackPanel>
+            <!-- latest service activity (fills the rest) -->
+            <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="{Binding ActivityText, StringFormat='Last activity: {0}'}" ToolTip="{Binding ActivityText}"
+                       Visibility="{Binding IsServiceResponding, Converter={StaticResource BoolToVisibility}}" />
+            </DockPanel>
         </Border>
     </Grid>
 </Window>

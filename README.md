@@ -8,7 +8,7 @@ It's basically a fail2ban for windows. Its goals are also mainly what we love ab
 - *no-initial-fucking-around-with-scripts-or-config-files*
 - *install-and-forget*
 
-You can download it [here](https://github.com/devnulli/EvlWatcher/raw/master/Versions/v3/EvlWatcher-v3.3.0-setup.exe) ( v3.3.0 - November 2026 ) .
+You can download it [here](https://github.com/devnulli/EvlWatcher/raw/master/Versions/v3/EvlWatcher-v3.4.0-setup.exe) ( v3.4.0 - November 2026 ) .
 
 Requirements: Windows 8.1 / Server 2012 or later with .NET Framework 4.7.2 (built into Windows 10 1803+, 11 and Server 2019+).
 

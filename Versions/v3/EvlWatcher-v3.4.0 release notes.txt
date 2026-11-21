@@ -1,0 +1,10 @@
+### 2026-11 release of v3.4.0
+- Bans & Whitelist tab: a search box above the three lists. Type any part of an address or pattern (e.g. 203.0.113, 192.168 or db8)
+  and the temporary bans, permanent bans and whitelist show only matching entries; "4 of 9 entries match." tells you how many.
+  The count badges and all buttons still work on the full lists ("Ban all permanently" bans every temporary ban, shown or not).
+  The search looks for the typed text: a full IP such as 192.168.1.5 does not find the whitelist pattern 192.168.* that covers it.
+- status bar: "Last activity" shows the service's newest log message with its age (e.g. "3 min ago: Temporarily banning 203.0.113.7,
+  this is strike 1"), and on the right the age of the IP country data used by rules with allowed countries ("updated today",
+  "9 days old", "not loaded"). It turns amber when the data is missing or more than 14 days old: see Settings > Country data.
+- console only; the service is unchanged from v3.3.0. Note: a v3.4 console with a service older than v3.3 hides the country data item.
+- everything else as in v3.3.0 (country filter), v3.2.0 (Analyzer tab) and v3.1.0 (Windows 8.1 / Server 2012 or later with .NET Framework 4.7.2).
