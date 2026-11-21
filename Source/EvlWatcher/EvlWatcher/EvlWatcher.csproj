@@ -74,6 +74,9 @@
     <Compile Include="Converter\SeverityToEventLogEntryType.cs" />
     <Compile Include="Converter\WildcardToRegexConverter.cs" />
     <Compile Include="DTOs\ExtractedEventRecord.cs" />
+    <Compile Include="Geo\CountryDatabase.cs" />
+    <Compile Include="Geo\DelegatedFileParser.cs" />
+    <Compile Include="Geo\ICountryLookup.cs" />
     <Compile Include="Logging\DefaultLogger.cs" />
     <Compile Include="Logging\ILogger.cs" />
     <Compile Include="Logging\LogEntry.cs" />

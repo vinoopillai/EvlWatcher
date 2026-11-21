@@ -32,3 +32,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("3.2.0.0")]
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EvlWatcher.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EvlWatcher.Tests.Integration")]
