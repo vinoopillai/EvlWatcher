@@ -92,6 +92,7 @@ namespace EvlWatcher
 
         /// <summary>Country data for rules with allowed countries; null when not wired (tests).</summary>
         private readonly Geo.CountryDataService _countryData;
+        private bool? _appliedCountryAutoUpdate;
 
         #endregion
 
@@ -198,6 +199,47 @@ namespace EvlWatcher
             {
                 if (wrote)
                     RequestReload();
+            }
+        }
+
+        public CountryDataStatusDTO GetCountryDataStatus()
+        {
+            EnsureClientPrivileges();
+
+            Geo.CountryDataStatus status = _countryData?.GetStatus() ?? new Geo.CountryDataStatus();
+            return new CountryDataStatusDTO
+            {
+                Loaded = status.Loaded,
+                UpdatedUtc = status.UpdatedUtc,
+                RangeCount = status.RangeCount,
+                LastError = status.LastError,
+                Registries = status.Registries.ToArray(),
+                AutoUpdate = _serviceconfiguration.CountryDataAutoUpdate
+            };
+        }
+
+        public void UpdateCountryDataNow()
+        {
+            EnsureClientPrivileges();
+
+            if (_countryData == null)
+                throw InvalidRuleFault("Country data isn't available in this service.");
+            _logger.Dump("Country data update requested from the console", SeverityLevel.Info);
+            _countryData.UpdateNowAsync();
+        }
+
+        public void SetCountryDataAutoUpdate(bool enabled)
+        {
+            EnsureClientPrivileges();
+
+            lock (_syncObject)
+            {
+                _serviceconfiguration.CountryDataAutoUpdate = enabled;
+                if (_countryData != null)
+                {
+                    _appliedCountryAutoUpdate = enabled;
+                    _countryData.SetAutoUpdate(enabled);
+                }
             }
         }
 
@@ -519,6 +561,13 @@ namespace EvlWatcher
 
                 //reload configuration in case of external changes
                 _serviceconfiguration.Load();
+
+                //country data refresh follows <CountryDataAutoUpdate>; only touch the timer when the setting changed
+                if (_countryData != null && _appliedCountryAutoUpdate != _serviceconfiguration.CountryDataAutoUpdate)
+                {
+                    _appliedCountryAutoUpdate = _serviceconfiguration.CountryDataAutoUpdate;
+                    _countryData.SetAutoUpdate(_appliedCountryAutoUpdate.Value);
+                }
 
                 //create generic tasks from configuration
                 List<LogTask> newTasks = InitWorkersFromConfig(_serviceconfiguration.TaskConfigurations);
@@ -857,7 +906,7 @@ namespace EvlWatcher
             // country data lives next to config.xml in geo\ (installer copy, refreshed weekly from the registries)
             string geoFolder = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(ConfigFile.Path), "geo");
             var countryData = new Geo.CountryDataService(geoFolder, new Geo.HttpRegistryDownloader(), logger, () => DateTime.UtcNow);
-            countryData.Start(true);
+            countryData.Start(false); // the weekly refresh follows <CountryDataAutoUpdate> once config.xml is loaded
             IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger, countryData);
 
             if (!Environment.UserInteractive)

@@ -60,5 +60,18 @@ namespace EvlWatcher.WCF
         [OperationContract]
         [FaultContract(typeof(ServiceFaultDTO))]
         void SetRuleActive(string taskName, bool active);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        CountryDataStatusDTO GetCountryDataStatus();
+
+        /// <summary>starts a refresh of the country data in the background and returns at once</summary>
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        void UpdateCountryDataNow();
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFaultDTO))]
+        void SetCountryDataAutoUpdate(bool enabled);
     }
 }

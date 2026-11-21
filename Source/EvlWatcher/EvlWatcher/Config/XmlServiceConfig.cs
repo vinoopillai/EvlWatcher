@@ -22,6 +22,7 @@ namespace EvlWatcher.Config
         private bool _inLoading = false;
         private int _consoleBacklog;
         private int _eventLogInterval;
+        private bool _countryDataAutoUpdate = true;
 
         #endregion
 
@@ -48,6 +49,23 @@ namespace EvlWatcher.Config
                     _eventLogInterval = value;
                     if (!_inLoading)
                         WriteGlobalConfig("CheckInterval", value.ToString());
+                }
+            }
+        }
+
+        public bool CountryDataAutoUpdate
+        {
+            get
+            {
+                return _countryDataAutoUpdate;
+            }
+            set
+            {
+                if (_countryDataAutoUpdate != value)
+                {
+                    _countryDataAutoUpdate = value;
+                    if (!_inLoading)
+                        WriteGlobalConfig("CountryDataAutoUpdate", value.ToString());
                 }
             }
         }
@@ -336,6 +354,10 @@ namespace EvlWatcher.Config
                     if (whitelist != null)
                         newWhitelist = whitelist.Value.Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries).ToList();
 
+                    // missing element = on (the default for existing installs)
+                    XElement autoUpdateElement = globalConfig.Element("CountryDataAutoUpdate");
+                    bool countryDataAutoUpdate = autoUpdateElement == null || !bool.TryParse(autoUpdateElement.Value.Trim(), out bool parsedAutoUpdate) || parsedAutoUpdate;
+
                     int? consoleBacklog = null;
                     XElement consoleBacklogElement = globalConfig.Element("ConsoleBacklog");
                     if (consoleBacklogElement != null)
@@ -384,6 +406,8 @@ namespace EvlWatcher.Config
                             _whiteListPatterns.Add(pattern);
                         _logger.Dump($"Loaded whitelist: {whitelist.Value}", SeverityLevel.Verbose);
                     }
+
+                    _countryDataAutoUpdate = countryDataAutoUpdate;
 
                     if (consoleBacklog.HasValue)
                     {

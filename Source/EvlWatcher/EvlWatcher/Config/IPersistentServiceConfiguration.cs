@@ -17,6 +17,11 @@ namespace EvlWatcher.Config
         int EventLogInterval { get; set; }
 
         /// <summary>
+        /// whether the service refreshes the country data from the internet registries weekly (default true)
+        /// </summary>
+        bool CountryDataAutoUpdate { get; set; }
+
+        /// <summary>
         /// this is the list of adresses which never get banned
         /// </summary>
         IQueryable<string> WhitelistPatterns { get; }

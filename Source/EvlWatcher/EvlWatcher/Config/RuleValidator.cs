@@ -68,6 +68,9 @@ namespace EvlWatcher.Config
                 messages.Add("Ban length must be at least 1 minute.");
             if (rule.PermaBanCount == 0)
                 messages.Add("Permanent ban after must be at least 1, or negative for never.");
+
+            if (rule.AllowedCountries != null && rule.AllowedCountries.Any(c => !IsCountryCode((c ?? string.Empty).Trim().ToUpperInvariant())))
+                messages.Add("Country codes must be two letters, e.g. IN.");
             #endregion
 
             #region regex
@@ -125,5 +128,9 @@ namespace EvlWatcher.Config
 
             return messages;
         }
+
+        /// <summary>Two letters A–Z (an ISO 3166 code as the registries use them).</summary>
+        private static bool IsCountryCode(string code) =>
+            code.Length == 2 && code[0] >= 'A' && code[0] <= 'Z' && code[1] >= 'A' && code[1] <= 'Z';
     }
 }
