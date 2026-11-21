@@ -27,6 +27,11 @@ namespace EvlWatcherConsole.ViewModel
         private readonly Rules.IRuleClient _ruleClient;
 
         private bool _isServiceResponding = false;
+        private DateTime _nextActivityUpdate = DateTime.MinValue;
+        private DateTime _nextCountryDataUpdate = DateTime.MinValue;
+        private string _activityText = "";
+        private string _countryDataText = "";
+        private bool _countryDataNeedsAttention;
         private string _permaBanIPString = "";
         private string _whiteListFilter = "";
         private string _consoleText;
@@ -54,6 +59,7 @@ namespace EvlWatcherConsole.ViewModel
         public MainWindowViewModel()
         {
             TemporarilyBannedIPs.CollectionChanged += TemporarilyBannedIPs_CollectionChanged;
+            IpSearch = new IpListSearch(TemporarilyBannedIPs, PermanentlyBannedIPs, WhiteListedPatterns);
             _model = new EvlWatcherModel();
             _ruleClient = _model;
             Rules = new RulesViewModel(_ruleClient);
@@ -117,6 +123,7 @@ namespace EvlWatcherConsole.ViewModel
 
                     if (serviceResponding)
                     {
+                        UpdateStatusBar();
                         if (IsIPTabSelected)
                         {
                             UpdateIPLists();
@@ -158,6 +165,33 @@ namespace EvlWatcherConsole.ViewModel
 
             }
 
+        }
+
+        /// <summary>Latest service activity every 5 s, country data age every 5 min; failures leave the last texts.</summary>
+        private void UpdateStatusBar()
+        {
+            DateTime now = DateTime.Now;
+            if (now >= _nextActivityUpdate)
+            {
+                _nextActivityUpdate = now.AddSeconds(5);
+                ActivityText = StatusBarText.Activity(_model.GetConsoleHistory(SeverityLevelDTO.Info), now);
+            }
+            if (now >= _nextCountryDataUpdate)
+            {
+                _nextCountryDataUpdate = now.AddMinutes(5);
+                CountryDataStatusDTO status;
+                try
+                {
+                    status = _ruleClient.GetCountryDataStatus();
+                }
+                catch (Exception)
+                {
+                    status = null; // older service without country data: hide the item
+                }
+                DateTime utc = DateTime.UtcNow;
+                CountryDataText = StatusBarText.CountryData(status, utc);
+                CountryDataNeedsAttention = StatusBarText.CountryDataNeedsAttention(status, utc);
+            }
         }
 
         private void UpdateConsole()
@@ -609,6 +643,29 @@ namespace EvlWatcherConsole.ViewModel
         public ObservableCollection<IPAddress> TemporarilyBannedIPs { get; } = new ObservableCollection<IPAddress>();
         public ObservableCollection<IPAddress> PermanentlyBannedIPs { get; } = new ObservableCollection<IPAddress>();
         public ObservableCollection<string> WhiteListedPatterns { get; } = new ObservableCollection<string>();
+
+        /// <summary>The search box above the three lists on the Bans &amp; Whitelist tab.</summary>
+        public IpListSearch IpSearch { get; }
+
+        /// <summary>Status bar: the service's latest logged activity, e.g. "3 min ago: Temporarily banning …".</summary>
+        public string ActivityText
+        {
+            get => _activityText;
+            private set { _activityText = value; Notify(nameof(ActivityText)); }
+        }
+
+        /// <summary>Status bar: "IP country data: 3 days old"; empty when the service has no country data support.</summary>
+        public string CountryDataText
+        {
+            get => _countryDataText;
+            private set { _countryDataText = value; Notify(nameof(CountryDataText)); }
+        }
+
+        public bool CountryDataNeedsAttention
+        {
+            get => _countryDataNeedsAttention;
+            private set { _countryDataNeedsAttention = value; Notify(nameof(CountryDataNeedsAttention)); }
+        }
 
         public int CheckInterval
         {
