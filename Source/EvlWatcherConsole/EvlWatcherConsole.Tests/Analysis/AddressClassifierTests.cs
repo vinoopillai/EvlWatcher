@@ -8,7 +8,7 @@ namespace EvlWatcherConsole.Tests.Analysis
     [TestClass]
     public class AddressClassifierTests
     {
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("1.2.3.4", "1.2.3.4")]
         [DataRow("1.2.3.4:51234", "1.2.3.4")]
         [DataRow("[2001:db8::1]:3389", "2001:db8::1")]
@@ -19,7 +19,7 @@ namespace EvlWatcherConsole.Tests.Analysis
             Assert.AreEqual(IPAddress.Parse(expected), ip);
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("-")]
         [DataRow("")]
         [DataRow(null)]
@@ -29,7 +29,7 @@ namespace EvlWatcherConsole.Tests.Analysis
             Assert.IsFalse(AddressClassifier.TryParse(value, out _));
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("10.0.0.5", true)]
         [DataRow("172.20.1.1", true)]
         [DataRow("192.168.1.50", true)]

@@ -57,6 +57,8 @@ namespace EvlWatcherConsole.ViewModel
             _model = new EvlWatcherModel();
             _ruleClient = _model;
             Rules = new RulesViewModel(_ruleClient);
+            Analyzer = new AnalyzerViewModel(_model, new Analysis.EventLogSource(), new View.MessageBoxConfirmer(),
+                                             () => DateTime.UtcNow, Analysis.AddressClassifier.GetLocalAddresses);
 
             StartUpdating();
         }
@@ -438,6 +440,8 @@ namespace EvlWatcherConsole.ViewModel
         }
 
         public RulesViewModel Rules { get; }
+
+        public AnalyzerViewModel Analyzer { get; }
 
         public bool IsRulesTabSelected
         {

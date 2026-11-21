@@ -81,7 +81,7 @@ namespace EvlWatcherConsole.Tests
             string[] keys =
             {
                 "ShieldIcon", "PulseIcon", "ListIcon", "SettingsIcon", "CodeIcon", "EditIcon",
-                "PlayIcon", "ResetIcon", "AddIcon", "CancelIcon", "LockIcon", "UnlockIcon"
+                "PlayIcon", "ResetIcon", "AddIcon", "CancelIcon", "LockIcon", "UnlockIcon", "AnalyzeIcon"
             };
             var problems = new List<string>();
             WpfApp.Invoke(() =>

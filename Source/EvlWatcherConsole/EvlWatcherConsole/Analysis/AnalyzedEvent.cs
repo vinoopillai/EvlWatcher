@@ -28,6 +28,9 @@ namespace EvlWatcherConsole.Analysis
 
         public long RecordId { get; private set; }
 
+        /// <summary>0 LogAlways, 1 Critical, 2 Error, 3 Warning, 4 Information, 5 Verbose.</summary>
+        public int Level { get; private set; }
+
         public DateTime TimeUtc { get; private set; }
 
         public string Xml { get; private set; }
@@ -59,6 +62,7 @@ namespace EvlWatcherConsole.Analysis
 
             int.TryParse(Child(system, "EventID")?.Value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int id);
             long.TryParse(Child(system, "EventRecordID")?.Value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long record);
+            int.TryParse(Child(system, "Level")?.Value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int level);
 
             DateTime time = DateTime.MinValue;
             string systemTime = Attr(Child(system, "TimeCreated"), "SystemTime");
@@ -75,6 +79,7 @@ namespace EvlWatcherConsole.Analysis
                 Provider = providerName,
                 EventId = id,
                 RecordId = record,
+                Level = level,
                 TimeUtc = time,
                 Xml = xml,
                 Data = ReadData(root)

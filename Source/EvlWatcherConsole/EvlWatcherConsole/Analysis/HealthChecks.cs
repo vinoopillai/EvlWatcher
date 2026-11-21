@@ -119,7 +119,8 @@ namespace EvlWatcherConsole.Analysis
 
         public static IList<Finding> Run(IReadOnlyDictionary<string, IList<AnalyzedEvent>> eventsByLog, AnalyzerInput input)
         {
-            List<AnalyzedEvent> all = eventsByLog.Values.SelectMany(v => v).ToList();
+            // Information (4) and Verbose (5) events are routine: e.g. Ntfs 98 "Volume C: is healthy" shares its ID with real problems.
+            List<AnalyzedEvent> all = eventsByLog.Values.SelectMany(v => v).Where(e => e.Level < 4).ToList();
             var findings = new List<Finding>();
 
             foreach (Check check in Checks)

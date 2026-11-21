@@ -244,6 +244,19 @@
             </TabItem>
 
             <!-- ============================================================ -->
+            <!-- Analyzer                                                      -->
+            <!-- ============================================================ -->
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource IconPathStyle}" Data="{StaticResource AnalyzeIcon}" Margin="0,0,8,0" />
+                        <TextBlock Text="Analyzer" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+                <view:AnalyzerView DataContext="{Binding Analyzer}" />
+            </TabItem>
+
+            <!-- ============================================================ -->
             <!-- Settings                                                      -->
             <!-- ============================================================ -->
             <TabItem IsSelected="{Binding IsGlobalConfigSelected, Mode=OneWayToSource}">

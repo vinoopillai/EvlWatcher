@@ -58,6 +58,19 @@ namespace EvlWatcherConsole.Tests.Analysis
         }
 
         [TestMethod]
+        public void InformationLevelEventsAreIgnored()
+        {
+            // "Volume C: is healthy. No action is needed." shares event ID 98 with real NTFS problems
+            Assert.AreEqual(0, Run(EventSamples.NtfsVolumeHealthy98(T0), EventSamples.NtfsVolumeHealthy98(T0.AddHours(1))).Count);
+        }
+
+        [TestMethod]
+        public void NtfsErrorIsCritical()
+        {
+            Assert.AreEqual(FindingSeverity.Critical, Run(EventSamples.NtfsCorruption55(T0)).Single().Severity);
+        }
+
+        [TestMethod]
         public void SecurityLogFullIsCritical()
         {
             Finding f = Run(EventSamples.SecurityLogFull1104(T0)).Single();

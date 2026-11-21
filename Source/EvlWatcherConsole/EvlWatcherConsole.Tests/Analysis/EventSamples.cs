@@ -99,6 +99,16 @@ namespace EvlWatcherConsole.Tests.Analysis
         public static AnalyzedEvent Other(string log, string provider, int id, DateTime utc) =>
             Make(log, provider, id, utc, Data(("param1", "x")));
 
+        /// <summary>Ntfs 98 as Windows logs it after a healthy check: Information level ("Volume C: is healthy").</summary>
+        public static AnalyzedEvent NtfsVolumeHealthy98(DateTime utc) =>
+            AnalyzedEvent.FromXml(System, Envelope(System, "Microsoft-Windows-Ntfs", 98, utc,
+                "<EventData><Data Name='DriveName'>C:</Data><Data Name='DeviceName'>\\Device\\HarddiskVolume3</Data></EventData>", level: 4));
+
+        /// <summary>Ntfs 55 as an Error: corruption found.</summary>
+        public static AnalyzedEvent NtfsCorruption55(DateTime utc) =>
+            AnalyzedEvent.FromXml(System, Envelope(System, "Ntfs", 55, utc,
+                "<EventData><Data Name='DriveName'>D:</Data></EventData>", level: 2));
+
         #region building
 
         private static string Data(params (string name, string value)[] fields) =>
@@ -116,11 +126,11 @@ namespace EvlWatcherConsole.Tests.Analysis
         private static AnalyzedEvent MakeUserData(string log, string provider, int id, DateTime utc, string userData) =>
             AnalyzedEvent.FromXml(log, Envelope(log, provider, id, utc, "<UserData>" + userData + "</UserData>"));
 
-        private static string Envelope(string log, string provider, int id, DateTime utc, string body)
+        private static string Envelope(string log, string provider, int id, DateTime utc, string body, int level = 0)
         {
             long record = Interlocked.Increment(ref _recordId);
             return "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>" +
-                   "<Provider Name='" + provider + "'/><EventID>" + id + "</EventID><Version>0</Version><Level>0</Level>" +
+                   "<Provider Name='" + provider + "'/><EventID>" + id + "</EventID><Version>0</Version><Level>" + level + "</Level>" +
                    "<TimeCreated SystemTime='" + utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture) + "'/>" +
                    "<EventRecordID>" + record + "</EventRecordID><Channel>" + log + "</Channel><Computer>SERVER01.corp.local</Computer>" +
                    "<Security/></System>" + body + "</Event>";
