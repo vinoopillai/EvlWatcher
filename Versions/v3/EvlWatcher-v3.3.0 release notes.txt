@@ -1,0 +1,16 @@
+### 2026-11 release of v3.3.0
+- new option on each rule (Rules tab): "Only allow addresses from: IN" (one or more two-letter country codes, e.g. IN or IN, AE).
+  A failed attempt from any other country gets the rule's temporary ban on its FIRST attempt instead of after "5 within 60 minutes".
+  Addresses from the allowed countries keep the rule's normal limit, so attackers from those countries are still caught the usual way.
+- country bans are temporary only and never count towards a permanent ban. A foreign address is banned again on its next attempt, and
+  while its old attempt is still inside the rule's time window it is banned again as soon as the ban lifts.
+- the country is the one an address is REGISTERED in, not where the person is. Users on cloud servers (e.g. a Mumbai region registered
+  abroad), VPNs or roaming abroad can get a temporary ban after one mistyped password: put their addresses on the whitelist.
+  The whitelist, private/LAN addresses and this server's own addresses are never country-banned.
+- country data: the free statistics files of the five internet registries (APNIC, RIPE NCC, ARIN, LACNIC, AFRINIC), about 330,000 ranges.
+  The installer ships a copy in the geo folder; the service refreshes it weekly by itself. This needs outgoing HTTPS from the server to
+  ftp.apnic.net, ftp.ripe.net, ftp.arin.net, ftp.lacnic.net and ftp.afrinic.net (normally allowed). A registry that can't be reached
+  keeps its previous copy. If no country data can be loaded at all, every rule simply uses its normal limit.
+  Settings tab: "Country data" shows the date and any problem, with "Update weekly" and "Update now".
+- the option is off for every rule until you switch it on. Upgrades keep your config.xml.
+- everything else as in v3.2.0 (Analyzer tab) and v3.1.0 (Windows 8.1 / Server 2012 or later with .NET Framework 4.7.2).
