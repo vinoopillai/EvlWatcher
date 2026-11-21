@@ -75,6 +75,8 @@
     <Compile Include="Converter\WildcardToRegexConverter.cs" />
     <Compile Include="DTOs\ExtractedEventRecord.cs" />
     <Compile Include="Geo\CountryDatabase.cs" />
+    <Compile Include="Geo\CountryDataService.cs" />
+    <Compile Include="Geo\IRegistryDownloader.cs" />
     <Compile Include="Geo\DelegatedFileParser.cs" />
     <Compile Include="Geo\ICountryLookup.cs" />
     <Compile Include="Logging\DefaultLogger.cs" />
