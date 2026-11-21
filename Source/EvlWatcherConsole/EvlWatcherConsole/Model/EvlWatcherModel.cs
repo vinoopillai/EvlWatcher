@@ -143,6 +143,23 @@ namespace EvlWatcherConsole.Model
             CallRuleService(() => Call(s => s.SetRuleActive(name, active)));
         }
 
+        CountryDataStatusDTO EvlWatcherConsole.Rules.IRuleClient.GetCountryDataStatus()
+        {
+            CountryDataStatusDTO status = null;
+            CallRuleService(() => status = Call(s => s.GetCountryDataStatus()));
+            return status ?? new CountryDataStatusDTO();
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.UpdateCountryDataNow()
+        {
+            CallRuleService(() => Call(s => s.UpdateCountryDataNow()));
+        }
+
+        void EvlWatcherConsole.Rules.IRuleClient.SetCountryDataAutoUpdate(bool enabled)
+        {
+            CallRuleService(() => Call(s => s.SetCountryDataAutoUpdate(enabled)));
+        }
+
         #endregion
 
         #region IAnalyzerClient

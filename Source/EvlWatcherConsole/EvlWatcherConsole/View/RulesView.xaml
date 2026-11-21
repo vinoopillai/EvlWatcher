@@ -124,6 +124,26 @@
                         <CheckBox Content="Never ban permanently" IsChecked="{Binding NeverPermanent}" Margin="16,0,0,0" />
                     </WrapPanel>
 
+                    <!-- Country option (not in the new-rule wizard) -->
+                    <StackPanel Margin="0,4,0,0" Visibility="{Binding ShowCountryOption, Converter={StaticResource BoolToVisibility}}">
+                        <WrapPanel>
+                            <CheckBox Content="Only allow addresses from" IsChecked="{Binding RestrictCountries}" VerticalAlignment="Center"
+                                      AutomationProperties.Name="Only allow addresses from these countries" />
+                            <TextBox Width="120" Margin="8,0" VerticalAlignment="Center"
+                                     Text="{Binding AllowedCountriesText, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding RestrictCountries}"
+                                     ToolTip="Two-letter country codes separated by commas, e.g. IN or IN, AE"
+                                     AutomationProperties.Name="Allowed country codes" />
+                            <TextBlock Style="{StaticResource SentenceTextStyle}" Text="— others are banned on their first failed attempt." />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,4,0,0" Text="{Binding CountryNamesText}"
+                                   Visibility="{Binding RestrictCountries, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,4,0,0" Text="{Binding CountryNote}"
+                                   Visibility="{Binding RestrictCountries, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource ErrorTextStyle}" Text="Country data isn't available, so this rule uses its normal limit for everyone."
+                                   Visibility="{Binding CountryDataUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+
                     <Expander Header="Advanced (event log, booster words, regex)" Margin="0,12,0,0">
                         <StackPanel Margin="0,8,0,0">
                             <TextBlock Text="Event logs (one per line)" Margin="0,0,0,4" />
