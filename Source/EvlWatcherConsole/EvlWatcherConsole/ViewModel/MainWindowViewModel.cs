@@ -57,6 +57,7 @@ namespace EvlWatcherConsole.ViewModel
             _model = new EvlWatcherModel();
             _ruleClient = _model;
             Rules = new RulesViewModel(_ruleClient);
+            CountryData = new CountryDataViewModel(_ruleClient);
             Analyzer = new AnalyzerViewModel(_model, new Analysis.EventLogSource(), new View.MessageBoxConfirmer(),
                                              () => DateTime.UtcNow, Analysis.AddressClassifier.GetLocalAddresses);
 
@@ -443,6 +444,8 @@ namespace EvlWatcherConsole.ViewModel
 
         public AnalyzerViewModel Analyzer { get; }
 
+        public CountryDataViewModel CountryData { get; }
+
         public bool IsRulesTabSelected
         {
             get; set;
@@ -452,9 +455,18 @@ namespace EvlWatcherConsole.ViewModel
         {
             get; set;
         }
+        private bool _isGlobalConfigSelected;
+
         public bool IsGlobalConfigSelected
         {
-            get; set;
+            get { return _isGlobalConfigSelected; }
+            set
+            {
+                bool opened = value && !_isGlobalConfigSelected;
+                _isGlobalConfigSelected = value;
+                if (opened)
+                    CountryData.Refresh(); // the country data status is read when the Settings tab opens
+            }
         }
 
 

@@ -327,6 +327,23 @@
                                 </Button>
                             </StackPanel>
                         </StackPanel>
+
+                        <!-- Country data for the rules' "Only allow addresses from" option -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" DataContext="{Binding CountryData}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardTitleStyle}" Text="Country data" />
+                                <TextBlock TextWrapping="Wrap" Text="{Binding StatusText}" />
+                                <TextBlock Style="{StaticResource HintTextStyle}" Margin="0,4,0,8"
+                                           Text="Used by rules that only allow some countries. Comes from the five internet registries (APNIC, RIPE NCC, ARIN, LACNIC, AFRINIC)." />
+                                <DockPanel LastChildFill="False">
+                                    <CheckBox DockPanel.Dock="Left" VerticalAlignment="Center" IsChecked="{Binding AutoUpdate}"
+                                              Content="Update weekly from the internet registries" />
+                                    <Button DockPanel.Dock="Right" Content="Update now" MinWidth="96" Command="{Binding UpdateNowCommand}"
+                                            ToolTip="Download the latest country data now (runs in the background)" />
+                                </DockPanel>
+                                <TextBlock Style="{StaticResource ErrorTextStyle}" Text="{Binding Error}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
