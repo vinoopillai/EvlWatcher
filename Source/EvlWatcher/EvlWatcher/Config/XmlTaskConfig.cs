@@ -34,7 +34,16 @@ namespace EvlWatcher.Config
 
                 XElement countries = taskConfig.Element("AllowedCountries");
                 if (countries != null)
-                    newTask._allowedCountries.AddRange(NormalizeCountries(countries.Value.Split(',')));
+                {
+                    // hand edits: accept , ; and spaces; any invalid entry turns the filter off for this rule (a typo must
+                    // never give every user of the intended country a first-attempt ban)
+                    List<string> codes = NormalizeCountries(countries.Value.Split(new[] { ',', ';', ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                    bool invalid = codes.Any(c => c.Length != 2 || !c.All(ch => ch >= 'A' && ch <= 'Z'));
+                    if (invalid)
+                        logger.Dump($"Rule {newTask.TaskName}: <AllowedCountries> \"{countries.Value.Trim()}\" contains invalid country codes; the country filter is OFF for this rule until they are fixed (two letters, e.g. IN).", SeverityLevel.Warning);
+                    else
+                        newTask._allowedCountries.AddRange(codes);
+                }
 
 
                 return newTask;

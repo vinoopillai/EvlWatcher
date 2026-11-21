@@ -35,9 +35,9 @@ namespace EvlWatcher.Geo
                     continue;
 
                 string[] f = line.Split('|');
-                if (f.Length < 7)
-                    continue;
-                if (char.IsDigit(f[0], 0) && f.Length >= 2 && registry == null)
+                if (f.Length < 7 || f[0].Length == 0)
+                    continue; // every real line starts with the registry (or the version number)
+                if (f[0].Length > 0 && char.IsDigit(f[0][0]) && registry == null)
                 {
                     registry = f[1]; // version header: 2|apnic|...
                     continue;

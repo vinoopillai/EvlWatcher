@@ -906,7 +906,15 @@ namespace EvlWatcher
             // country data lives next to config.xml in geo\ (installer copy, refreshed weekly from the registries)
             string geoFolder = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(ConfigFile.Path), "geo");
             var countryData = new Geo.CountryDataService(geoFolder, new Geo.HttpRegistryDownloader(), logger, () => DateTime.UtcNow);
-            countryData.Start(false); // the weekly refresh follows <CountryDataAutoUpdate> once config.xml is loaded
+            try
+            {
+                countryData.Start(false); // the weekly refresh follows <CountryDataAutoUpdate> once config.xml is loaded
+            }
+            catch (Exception e)
+            {
+                // broken country data must never keep the service from starting: rules then use their normal limits
+                logger.Dump(e, SeverityLevel.Warning);
+            }
             IGenericTaskFactory genericTaskFactory = new DefaultGenericTaskFactory(logger, countryData);
 
             if (!Environment.UserInteractive)

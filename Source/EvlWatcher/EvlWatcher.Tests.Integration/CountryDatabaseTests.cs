@@ -79,6 +79,14 @@ namespace EvlWatcher.Tests.Integration
         }
 
         [TestMethod]
+        public void LineWithEmptyFirstFieldIsSkipped()
+        {
+            IList<CountryRange> ranges = Parse("|xx|ipv4|1.1.1.0|256|20200101|allocated\n" + ApnicSample, out string? registry);
+            Assert.AreEqual(3, ranges.Count);
+            Assert.AreEqual("apnic", registry);
+        }
+
+        [TestMethod]
         public void MalformedLinesAreSkipped()
         {
             IList<CountryRange> ranges = Parse(ApnicSample +

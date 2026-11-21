@@ -117,6 +117,33 @@ namespace EvlWatcher.Tests.Integration
             Assert.AreEqual(0, t.GetTempBanVictims().Count);
         }
 
+        private static XmlTaskConfig LoadTask(string allowedCountries, TestLogger logger)
+        {
+            var task = new XElement("Task", new XAttribute("Name", "R"), new XAttribute("Active", "true"),
+                new XElement("Description", "d"), new XElement("LockTime", "3600"), new XElement("OnlyNew", "False"),
+                new XElement("EventAge", "120"), new XElement("TriggerCount", "5"), new XElement("PermaBanCount", "3"),
+                new XElement("EventPath", "Security"), new XElement("RegexBoosters", new XElement("Booster", "4625")),
+                new XElement("Regex", "(x)"), new XElement("AllowedCountries", allowedCountries));
+            return XmlTaskConfig.FromXmlElement(task, new object(), logger);
+        }
+
+        [TestMethod]
+        public void HandEditedSemicolonsAndSpacesAreAccepted()
+        {
+            CollectionAssert.AreEqual(new[] { "IN", "AE" }, LoadTask(" IN; ae ", new TestLogger()).AllowedCountries.ToArray());
+            CollectionAssert.AreEqual(new[] { "IN", "AE" }, LoadTask("IN AE", new TestLogger()).AllowedCountries.ToArray());
+        }
+
+        [TestMethod]
+        public void InvalidHandEditedCountriesTurnTheFilterOff()
+        {
+            // a typo must never give every user of the intended country a first-attempt ban
+            var logger = new TestLogger();
+            Assert.AreEqual(0, LoadTask("India", logger).AllowedCountries.Count);
+            Assert.IsTrue(logger.Messages.Any(m => m.StartsWith("Warning") && m.Contains("India")));
+            Assert.AreEqual(0, LoadTask("IN, IND", new TestLogger()).AllowedCountries.Count);
+        }
+
         [TestMethod]
         public void XmlTaskConfigRoundTripsAllowedCountries()
         {

@@ -37,6 +37,23 @@ namespace EvlWatcher.Tests.Integration
         }
     }
 
+    internal sealed class ThrowingDownloader : IRegistryDownloader
+    {
+        private readonly IRegistryDownloader _inner;
+        private readonly string _registry;
+        private readonly Exception _error;
+
+        public ThrowingDownloader(IRegistryDownloader inner, string registry, Exception error)
+        {
+            _inner = inner;
+            _registry = registry;
+            _error = error;
+        }
+
+        public string Download(string url) =>
+            CountryDataService.Sources[_registry] == url ? throw _error : _inner.Download(url);
+    }
+
     [TestClass]
     public class CountryDataServiceTests
     {
@@ -176,16 +193,70 @@ namespace EvlWatcher.Tests.Integration
         }
 
         [TestMethod]
+        public void UnexpectedErrorInOneRegistryDoesNotStopTheOthers()
+        {
+            FakeDownloader d = AllRegistries();
+            d.Files["apnic"] = null!; // the parser would be handed null; any unexpected exception must stay per registry
+            var throwing = new ThrowingDownloader(d, "apnic", new InvalidOperationException("boom"));
+            CountryDataService s = Service(throwing);
+
+            s.UpdateAll();
+
+            Assert.AreEqual("DE", s.GetCountry(IPAddress.Parse("5.1.2.3")), "other registries still updated and loaded");
+            StringAssert.Contains(s.GetStatus().LastError, "APNIC: boom");
+        }
+
+        [TestMethod]
+        public void TimerTickNeverThrows()
+        {
+            var s = new CountryDataService("C:\\bad|folder?", new FakeDownloader(), new TestLogger(), () => DateTime.UtcNow);
+            s.Tick(); // an exception on a timer thread would end the service process
+        }
+
+        [TestMethod]
+        public void TimerUpdatesOnlyRegistriesThatAreDue()
+        {
+            DateTime now = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
+            foreach (var r in Registries)
+                WriteFile(r.registry, RegistryFile(r.registry, r.cc, r.octet, 1200));
+            foreach (var r in Registries)
+                File.SetLastWriteTimeUtc(Path.Combine(_folder, "delegated-" + r.registry + ".txt"), now.AddDays(-1));
+            File.SetLastWriteTimeUtc(Path.Combine(_folder, "delegated-lacnic.txt"), now.AddDays(-9));
+            FakeDownloader d = AllRegistries();
+            CountryDataService s = Service(d, now);
+
+            s.Tick();
+
+            Assert.AreEqual(1, d.Calls, "only the stale LACNIC file is downloaded again");
+        }
+
+        [TestMethod]
+        public void StatusFlagsOldRegistryData()
+        {
+            DateTime now = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
+            WriteFile("apnic", RegistryFile("apnic", "IN", 103, 1200));
+            WriteFile("lacnic", RegistryFile("lacnic", "BR", 177, 1200));
+            File.SetLastWriteTimeUtc(Path.Combine(_folder, "delegated-apnic.txt"), now.AddDays(-1));
+            File.SetLastWriteTimeUtc(Path.Combine(_folder, "delegated-lacnic.txt"), now.AddDays(-23));
+            CountryDataService s = Service(new FakeDownloader(), now);
+            s.Load();
+
+            StringAssert.Contains(s.GetStatus().LastError, "LACNIC data is 23 days old");
+        }
+
+        [TestMethod]
         public void NeedsUpdateAfterSevenDays()
         {
             CountryDataService fresh = Service(new FakeDownloader());
             Assert.IsTrue(fresh.NeedsUpdate, "no files at all");
 
-            WriteFile("apnic", RegistryFile("apnic", "IN", 103, 1200));
-            string path = Path.Combine(_folder, "delegated-apnic.txt");
             DateTime now = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
-
-            File.SetLastWriteTimeUtc(path, now.AddDays(-2));
+            foreach (var r in Registries)
+            {
+                WriteFile(r.registry, RegistryFile(r.registry, r.cc, r.octet, 1200));
+                File.SetLastWriteTimeUtc(Path.Combine(_folder, "delegated-" + r.registry + ".txt"), now.AddDays(-2));
+            }
+            string path = Path.Combine(_folder, "delegated-apnic.txt");
             Assert.IsFalse(Service(new FakeDownloader(), now).NeedsUpdate);
 
             File.SetLastWriteTimeUtc(path, now.AddDays(-8));

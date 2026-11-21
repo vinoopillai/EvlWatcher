@@ -46,6 +46,9 @@ namespace EvlWatcher.Geo
 
         private static readonly TimeSpan CheckEvery = TimeSpan.FromHours(6);
 
+        /// <summary>A registry file older than this is called out in the status.</summary>
+        private const int StaleDays = 14;
+
         private readonly object _syncObject = new object();
         private readonly string _folder;
         private readonly IRegistryDownloader _downloader;
@@ -83,14 +86,18 @@ namespace EvlWatcher.Geo
 
         #region public operations
 
-        /// <summary>True when no registry file exists or the newest one is older than <see cref="RefreshAge"/>.</summary>
-        public bool NeedsUpdate
+        /// <summary>True when any registry's file is missing or older than <see cref="RefreshAge"/>.</summary>
+        public bool NeedsUpdate => DueRegistries().Count > 0;
+
+        /// <summary>Registries whose own file is missing or older than <see cref="RefreshAge"/>; a failing one is retried every check.</summary>
+        internal IList<string> DueRegistries()
         {
-            get
+            DateTime now = _utcNow();
+            return Sources.Keys.Where(name =>
             {
-                DateTime? newest = NewestFileUtc();
-                return !newest.HasValue || _utcNow() - newest.Value > RefreshAge;
-            }
+                string path = FilePath(name);
+                return !File.Exists(path) || now - File.GetLastWriteTimeUtc(path) > RefreshAge;
+            }).ToList();
         }
 
         public void Load()
@@ -118,8 +125,9 @@ namespace EvlWatcher.Geo
                         registries.Add(ranges);
                         names.Add(name.ToUpperInvariant());
                     }
-                    catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                    catch (Exception e)
                     {
+                        // any broken file is skipped: the others still load, and nothing here may stop the service
                         _logger.Dump($"Country data: couldn't read {path}: {e.Message}", SeverityLevel.Warning);
                     }
                 }
@@ -140,15 +148,21 @@ namespace EvlWatcher.Geo
         /// <summary>Downloads every registry; each valid file replaces only its own registry's file.</summary>
         public void UpdateAll()
         {
+            Update(Sources.Keys.ToList());
+        }
+
+        /// <summary>Downloads the given registries; each valid file replaces only its own registry's file.</summary>
+        internal void Update(IList<string> registries)
+        {
             var errors = new List<string>();
             int succeeded = 0;
-            Directory.CreateDirectory(_folder);
 
-            foreach (KeyValuePair<string, string> source in Sources)
+            foreach (KeyValuePair<string, string> source in Sources.Where(s => registries.Contains(s.Key)))
             {
                 string label = source.Key.ToUpperInvariant();
                 try
                 {
+                    Directory.CreateDirectory(_folder);
                     string text = _downloader.Download(source.Value);
                     IList<CountryRange> ranges;
                     using (var reader = new StringReader(text ?? ""))
@@ -162,9 +176,9 @@ namespace EvlWatcher.Geo
                     File.Delete(tmp);
                     succeeded++;
                 }
-                catch (Exception e) when (e is WebException || e is IOException || e is InvalidDataException
-                                          || e is UnauthorizedAccessException || e is NotSupportedException || e is KeyNotFoundException)
+                catch (Exception e)
                 {
+                    // whatever goes wrong stays with this registry: the others still update, and the status names it
                     errors.Add($"{label}: {e.Message}");
                     _logger.Dump($"Country data: {label} update failed, keeping the previous file: {e.Message}", SeverityLevel.Warning);
                 }
@@ -191,7 +205,7 @@ namespace EvlWatcher.Geo
             lock (_syncObject)
             {
                 _timer?.Dispose();
-                _timer = enabled ? new Timer(_ => { if (NeedsUpdate) RunUpdate(); }, null, TimeSpan.FromSeconds(30), CheckEvery) : null;
+                _timer = enabled ? new Timer(_ => Tick(), null, TimeSpan.FromSeconds(30), CheckEvery) : null;
             }
         }
 
@@ -205,12 +219,27 @@ namespace EvlWatcher.Geo
         {
             lock (_syncObject)
             {
+                // stale files are reported even after a restart (when the last error is gone)
+                DateTime now = _utcNow();
+                List<string> problems = new List<string>();
+                if (!string.IsNullOrEmpty(_lastError))
+                    problems.Add(_lastError);
+                foreach (string name in Sources.Keys)
+                {
+                    string path = FilePath(name);
+                    if (!File.Exists(path))
+                        continue;
+                    int days = (int)(now - File.GetLastWriteTimeUtc(path)).TotalDays;
+                    if (days > StaleDays)
+                        problems.Add($"{name.ToUpperInvariant()} data is {days} days old");
+                }
+
                 return new CountryDataStatus
                 {
                     Loaded = _database.IsLoaded,
                     RangeCount = _database.RangeCount,
                     UpdatedUtc = _updatedUtc ?? NewestFileUtc(),
-                    LastError = _lastError,
+                    LastError = problems.Count == 0 ? null : string.Join("; ", problems),
                     Registries = _loadedRegistries.ToList()
                 };
             }
@@ -229,13 +258,29 @@ namespace EvlWatcher.Geo
 
         #region private operations
 
-        private void RunUpdate()
+        /// <summary>The timer's check (also callable from tests).</summary>
+        internal void Tick()
+        {
+            try
+            {
+                IList<string> due = DueRegistries();
+                if (due.Count > 0)
+                    RunUpdate(due);
+            }
+            catch (Exception e)
+            {
+                // an exception on a timer thread would end the whole service process
+                _logger.Dump(e, SeverityLevel.Warning);
+            }
+        }
+
+        private void RunUpdate(IList<string> registries = null)
         {
             if (Interlocked.Exchange(ref _updating, 1) == 1)
                 return;
             try
             {
-                UpdateAll();
+                Update(registries ?? Sources.Keys.ToList());
             }
             catch (Exception e)
             {
